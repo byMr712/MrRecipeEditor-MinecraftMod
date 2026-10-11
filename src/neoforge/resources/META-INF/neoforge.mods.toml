@@ -1,0 +1,30 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="Apache-2.0"
+issueTrackerURL="https://github.com/byMr712/MrRecipeEditor-MinecraftMod/issues"
+
+[[mods]]
+modId="recipeeditor"
+version="${version}"
+displayName="[MR] Recipe Editor"
+displayURL="https://github.com/byMr712/MrRecipeEditor-MinecraftMod"
+logoFile="assets/recipeeditor/icon.png"
+authors="byMr712"
+description='''Universal In-Game Recipe Editor and Creator for Minecraft ${minecraft_version}. Create, modify, and auto-detect recipes for any vanilla or modded items directly in-game with drag & drop support.'''
+
+[[mixins]]
+config="recipeeditor.mixins.json"
+
+[[dependencies.recipeeditor]]
+modId="neoforge"
+type="required"
+versionRange="[1,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.recipeeditor]]
+modId="minecraft"
+type="required"
+versionRange="[${minecraft_version}]"
+ordering="NONE"
+side="BOTH"

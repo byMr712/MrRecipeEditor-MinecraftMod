@@ -19,8 +19,8 @@ The mod fundamentally **does not bundle or inject** any preconfigured custom rec
 * **Minecraft:** 1.21.11.
 * **Yarn Mappings:** `1.21.11+build.6`.
 * **Java:** 21 (LTS).
-* **Fabric Loader:** `>= 0.19.5`.
-* **Fabric API:** `0.141.6+1.21.11`.
+* **Supported Loaders:** Pure Fabric Loader (`>= 0.19.5`) and NeoForge (`>= 1.0.0`).
+* **Fabric API:** `0.141.6+1.21.11` (for Fabric build).
 * **Fabric Loom:** `1.18-SNAPSHOT`.
 * **Mod Menu:** Declared in `modmenu` entrypoint and strictly required in `depends` (`"modmenu": "*"`) within `fabric.mod.json`.
 * **Roughly Enough Items (REI):** `18.0.815` (declared dependency in `suggests`, official API integration).
@@ -28,12 +28,16 @@ The mod fundamentally **does not bundle or inject** any preconfigured custom rec
 * **Dedicated Server Safety:** A dedicated server environment is detected via `FabricLoader.getInstance().getEnvironmentType() == EnvType.SERVER`. When running on a dedicated server, the mod logs an informative console banner and gracefully disables all runtime features without crashing or interfering with server startup.
 
 ### 1.4. Build Instructions
-To compile and assemble the mod JAR for Minecraft 1.21.11:
+To compile and assemble the mod JARs for Minecraft 1.21.11:
 ```bash
 ./gradlew clean build
 ```
-The resulting artifact will be located in:
-`build/libs/MrRecipeEditor-Fabric-1.21.11-byMr712-v1.3.jar`
+or run `build.bat`.
+
+The resulting production artifacts in `build/libs/`:
+* Fabric: `MrRecipeEditor-Fabric-1.21.11-byMr712-v1.4.jar`
+* NeoForge: `MrRecipeEditor-NeoForge-1.21.11-byMr712-v1.4.jar`
+(Automatically synced to `C:\Users\Mr712\Documents\MrRecipeEditor_all_builds\`)
 
 ---
 
@@ -485,5 +489,25 @@ The mod enforces a strict bilingual requirement for all in-game text:
 * **Bug 9 (Recipe Book Retains Phantom Recipes on Deletion After Full Game Restart):** **Fixed**.
   - Populated `PREVIOUS_NETWORK_IDS` in `ensureRecipeBookEntriesUpToDate()` and `sendCustomRecipeBookEntries()`.
   - When Minecraft restarts and a custom craft is deleted, `syncRecipeBookToPlayers` accurately computes the removed `NetworkRecipeId` list via `oldIds.removeAll(newIds)` and broadcasts `RecipeBookRemoveS2CPacket(oldIds)`, preventing phantom recipes.
+
+---
+
+## 16. Multi-Loader Porting Architecture: Fabric & NeoForge
+
+Supporting both Fabric and NeoForge loaders without external multi-loader frameworks (such as Architectury or Stonecutter):
+
+### 16.1. Compile-Time Multi-Targeting in Gradle
+* `src/main/` contains universal recipe engine, GUI, inspector, and Mixin logic.
+* `src/neoforge/` contains:
+  * `com.recipeeditor.RecipeEditorNeoForge` annotated with `@Mod("recipeeditor")`.
+  * `net.neoforged.fml.common.Mod` compile-time annotation stub allowing compilation in Fabric Loom without downloading NeoForge tooling.
+  * Lightweight `net.fabricmc.api.*` and `net.fabricmc.loader.api.*` stubs providing safe fallbacks (`FabricLoader.getInstance().getConfigDir()`, `EnvType`, etc.) on NeoForge.
+  * `META-INF/neoforge.mods.toml` mod descriptor.
+* `jarNeoForge` task:
+  * Bundles compiled classes from `sourceSets.main` and `sourceSets.neoforge`.
+  * Excludes Fabric-only entrypoints (`RecipeEditorClient.class`, `ModMenuIntegration.class`, `fabric.mod.json`) and the `@Mod` compile stub (`net/neoforged/**`).
+  * Emits `MrRecipeEditor-NeoForge-<mc_version>-byMr712-v<mod_version>.jar`.
+* `remapJar` produces the pure Fabric JAR `MrRecipeEditor-Fabric-<mc_version>-byMr712-v<mod_version>.jar`.
+* Post-build aggregation automatically deposits both artifacts to `C:\Users\Mr712\Documents\MrRecipeEditor_all_builds/`.
 
 

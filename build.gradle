@@ -90,6 +90,89 @@ remapJar {
     archiveFileName = "${project.archives_base_name}.jar"
 }
 
+tasks.matching { it.name == 'sourcesJar' || it.name == 'remapSourcesJar' || it.name == 'javadocJar' }.configureEach {
+    enabled = false
+}
+
+sourceSets {
+    neoforge {
+        java {
+            srcDirs = ['src/neoforge/java']
+        }
+        resources {
+            srcDirs = ['src/neoforge/resources']
+        }
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += sourceSets.main.output + configurations.runtimeClasspath
+    }
+}
+
+processNeoforgeResources {
+    inputs.property "version", project.version
+    inputs.property "minecraft_version", project.minecraft_version
+
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand "version": project.version, "minecraft_version": project.minecraft_version
+    }
+}
+
+task jarNeoForge(type: Jar) {
+    dependsOn compileNeoforgeJava, processNeoforgeResources
+    archiveFileName = "${project.archives_base_name.replace('-Fabric-', '-NeoForge-')}.jar"
+    destinationDirectory = layout.buildDirectory.dir("libs")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    from(sourceSets.main.output) {
+        exclude "com/recipeeditor/client/RecipeEditorClient.class"
+        exclude "com/recipeeditor/integration/ModMenuIntegration.class"
+        exclude "fabric.mod.json"
+    }
+    from(sourceSets.neoforge.output) {
+        exclude "net/neoforged/**"
+    }
+    from("src/main/resources") {
+        include "assets/**"
+        include "data/**"
+        include "recipeeditor.mixins.json"
+    }
+    from("LICENSE")
+}
+
+build.dependsOn(jarNeoForge)
+
+def allBuildsDir = file("C:/Users/Mr712/Documents/MrRecipeEditor_all_builds")
+tasks.register('copyToAllBuildsFabric', Copy) {
+    dependsOn remapJar
+    from remapJar.archiveFile
+    into file("${allBuildsDir}/Fabric")
+    doLast {
+        copy {
+            from remapJar.archiveFile
+            into allBuildsDir
+        }
+        println ">>> Copied ${remapJar.archiveFileName.get()} to ${allBuildsDir.absolutePath}/Fabric!"
+    }
+}
+
+tasks.register('copyToAllBuildsNeoForge', Copy) {
+    dependsOn jarNeoForge
+    from jarNeoForge.archiveFile
+    into file("${allBuildsDir}/NeoForge")
+    doLast {
+        copy {
+            from jarNeoForge.archiveFile
+            into allBuildsDir
+        }
+        println ">>> Copied ${jarNeoForge.archiveFileName.get()} to ${allBuildsDir.absolutePath}/NeoForge!"
+    }
+}
+
+task copyToAllBuilds {
+    dependsOn copyToAllBuildsFabric, copyToAllBuildsNeoForge
+}
+
+build.finalizedBy(copyToAllBuilds)
+
 publishing {
     publications {
         create("mavenJava", MavenPublication) {

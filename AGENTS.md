@@ -19,8 +19,8 @@ The mod fundamentally **does not bundle or inject** any preconfigured custom rec
 * **Minecraft:** 26.3.
 * **Mappings:** Official Mojang Mappings.
 * **Java:** 25.
-* **Fabric Loader:** `>= 0.19.5`.
-* **Fabric API:** `0.162.0+26.3`.
+* **Supported Loaders:** Pure Fabric Loader (`>= 0.19.5`) and NeoForge (`>= 1.0.0`).
+* **Fabric API:** `0.162.0+26.3` (for Fabric build).
 * **Fabric Loom:** `1.18-SNAPSHOT`.
 * **Mod Menu:** Declared in `modmenu` entrypoint and strictly required in `depends` (`"modmenu": "*"`) within `fabric.mod.json`.
 * **Execution Environment:** Client and Integrated Server (Singleplayer / LAN).
@@ -31,13 +31,18 @@ The mod fundamentally **does not bundle or inject** any preconfigured custom rec
 * Every supported Minecraft release maintains its own dedicated branch for targeted builds and backward-compatible patches:
   * **Java 21 (Yarn mappings):** `1.21`, `1.21.1`, `1.21.2`, `1.21.3`, `1.21.4`, `1.21.5`, `1.21.6`, `1.21.7`, `1.21.8`, `1.21.9`, `1.21.10`, `1.21.11`
   * **Java 25 (Mojang mappings):** `26.1`, `26.1.1`, `26.1.2`, `26.2`, `26.3`
-* Build artifacts for distribution are generated per branch with standard nomenclature (`MrRecipeEditor-Fabric-<mc_version>-byMr712-v<mod_version>.jar`).
+* Build artifacts for distribution are generated per branch with standard nomenclature:
+  * Fabric: `MrRecipeEditor-Fabric-<mc_version>-byMr712-v<mod_version>.jar`
+  * NeoForge: `MrRecipeEditor-NeoForge-<mc_version>-byMr712-v<mod_version>.jar`
 
 ### 1.5. Build Instructions and Key Version Nuances for Minecraft 26.3
 1. **Prerequisites & Build Command**:
    * JDK 25 (`C:\Program Files\Java\jdk-25.0.2` configured in `gradle.properties`).
-   * `./gradlew clean build --console=plain`
-   * Remapped production JAR: `build/libs/MrRecipeEditor-Fabric-26.3-byMr712-v1.4.jar`.
+   * `./gradlew clean build --console=plain` or `build.bat`
+   * Remapped production JARs in `build/libs/`:
+     - Fabric: `MrRecipeEditor-Fabric-26.3-byMr712-v1.4.jar`
+     - NeoForge: `MrRecipeEditor-NeoForge-26.3-byMr712-v1.4.jar`
+     (Automatically synced to `C:\Users\Mr712\Documents\MrRecipeEditor_all_builds\`)
 2. **Key Version Specific Nuances (Minecraft 26.X & 26.3)**:
    * **Official Mojang Mappings & Java 25**:
      Modern Mojang mapping nomenclature (`net.minecraft.world.item.*`, `net.minecraft.client.gui.screens.*`, `net.minecraft.core.registries.BuiltInRegistries`).
@@ -520,3 +525,23 @@ The mod enforces a strict bilingual requirement for all in-game text:
   - In `CustomDynamicSmithingRecipe.assemble(SmithingRecipeInput)`, replaced raw `crafted.applyComponents(baseStack.getComponents())` with vanilla Minecraft 26.X transmutation: `TransmuteRecipe.createWithOriginalComponents(new ItemStackTemplate(this.resultStack.getItem(), this.resultStack.getCount()), baseStack)`. This properly preserves enchantments, custom names, durability damage, and repair cost from the base item without corrupting the output item's model, base attributes, or identity.
   - In `CustomRecipeData.computeIngredientForSlot(int slot)`, added a fallback to `TagResolver.getAllItemsForTag(slotStr)` when `BuiltInRegistries.ITEM.get(tagKey)` returns `Optional.empty()` (as dynamic datapack tags are not stored in the static item registry in 26.X), ensuring smithing recipes with tag ingredients (e.g., templates or additions) match and craft reliably.
   - In `TagResolver.getAllItemsForTag`, wrapped `FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT` in a safe `try-catch` guard.
+
+---
+
+## 16. Multi-Loader Porting Architecture: Fabric & NeoForge
+
+Supporting both Fabric and NeoForge loaders without external multi-loader frameworks (such as Architectury or Stonecutter):
+
+### 16.1. Compile-Time Multi-Targeting in Gradle
+* `src/main/` contains universal recipe engine, GUI, inspector, and Mixin logic.
+* `src/neoforge/` contains:
+  * `com.recipeeditor.RecipeEditorNeoForge` annotated with `@Mod("recipeeditor")`.
+  * `net.neoforged.fml.common.Mod` compile-time annotation stub allowing compilation in Fabric Loom without downloading NeoForge tooling.
+  * Lightweight `net.fabricmc.api.*` and `net.fabricmc.loader.api.*` stubs providing safe fallbacks (`FabricLoader.getInstance().getConfigDir()`, `EnvType`, etc.) on NeoForge.
+  * `META-INF/neoforge.mods.toml` mod descriptor.
+* `jarNeoForge` task:
+  * Bundles compiled classes from `sourceSets.main` and `sourceSets.neoforge`.
+  * Excludes Fabric-only entrypoints (`RecipeEditorClient.class`, `ModMenuIntegration.class`, `fabric.mod.json`) and the `@Mod` compile stub (`net/neoforged/**`).
+  * Emits `MrRecipeEditor-NeoForge-<mc_version>-byMr712-v<mod_version>.jar`.
+* `remapJar` produces the pure Fabric JAR `MrRecipeEditor-Fabric-<mc_version>-byMr712-v<mod_version>.jar`.
+* Post-build aggregation automatically deposits both artifacts to `C:\Users\Mr712\Documents\MrRecipeEditor_all_builds/`.

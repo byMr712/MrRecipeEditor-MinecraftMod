@@ -1,4 +1,4 @@
-# Architectural Blueprint and Technical Specification for [MR] Recipe Editor (Minecraft 1.21.5 Fabric)
+﻿# Architectural Blueprint and Technical Specification for [MR] Recipe Editor (Minecraft 1.21.5 Fabric)
 
 This document provides a comprehensive technical blueprint and architectural specification for the **[MR] Recipe Editor** modification for Minecraft 1.21.5 (Fabric). It is designed for AI agents, system architects, and software engineers who require an exhaustive understanding of every implementation detail: from internal data structures and pattern-matching algorithms to network synchronization, Roughly Enough Items (REI) integration, and low-level bytecode mixins.
 
@@ -19,29 +19,25 @@ The mod fundamentally **does not bundle or inject** any preconfigured custom rec
 * **Minecraft:** 1.21.5.
 * **Yarn Mappings:** `1.21.5+build.1`.
 * **Java:** 21 (LTS).
-* **Fabric Loader:** `>= 0.19.5`.
-* **Fabric API:** `0.128.2+1.21.5`.
+* **Supported Loaders:** Pure Fabric Loader (`>= 0.19.5`) and NeoForge (`>= 1.0.0`).
+* **Fabric API:** `0.128.2+1.21.5` (for Fabric build).
 * **Fabric Loom:** `1.18-SNAPSHOT`.
 * **Mod Menu:** Declared in `modmenu` entrypoint and strictly required in `depends` (`"modmenu": "*"`) within `fabric.mod.json`.
 * **Roughly Enough Items (REI):** `18.0.815` (declared dependency in `suggests`, official API integration).
 * **Execution Environment:** Client and Integrated Server (Singleplayer / LAN).
 * **Dedicated Server Safety:** A dedicated server environment is detected via `FabricLoader.getInstance().getEnvironmentType() == EnvType.SERVER`. When running on a dedicated server, the mod logs an informative console banner and gracefully disables all runtime features without crashing or interfering with server startup.
 
-### 1.4. Build Instructions for Minecraft 1.21.5
-1. **Prerequisites**:
-   * JDK 21 or higher (e.g. JDK 21 LTS or JDK 25).
-   * Configured in `gradle.properties` (`org.gradle.java.home`).
-2. **Build Command**:
-   ```bash
-   ./gradlew clean build --console=plain
-   ```
-3. **Artifact Output**:
-   * Remapped production JAR: `build/libs/MrRecipeEditor-Fabric-1.21.5-byMr712-v1.3.jar`.
-4. **Version Specific Architecture**:
-   * Mappings: Yarn `1.21.5+build.1`.
-   * ServerRecipeManager and NetworkRecipeId architecture.
-   * `AbstractFurnaceBlockEntityMixin` patches vanilla furnace smelting to correctly increment multi-item outputs.
+### 1.4. Build Instructions
+To compile and assemble the mod JARs for Minecraft 1.21.5:
+``bash
+./gradlew clean build
+``
+or run `build.bat`.
 
+The resulting production artifacts in `build/libs/`:
+* Fabric: `MrRecipeEditor-Fabric-1.21.5-byMr712-v1.4.jar`
+* NeoForge: `MrRecipeEditor-NeoForge-1.21.5-byMr712-v1.4.jar`
+(Automatically synced to `C:\Users\Mr712\Documents\MrRecipeEditor_all_builds\`)
 ---
 
 ## 2. High-Level System Architecture
@@ -493,3 +489,22 @@ The mod enforces a strict bilingual requirement for all in-game text:
   - Populated `PREVIOUS_NETWORK_IDS` in `ensureRecipeBookEntriesUpToDate()` and `sendCustomRecipeBookEntries()`.
   - When Minecraft restarts and a custom craft is deleted, `syncRecipeBookToPlayers` accurately computes the removed `NetworkRecipeId` list via `oldIds.removeAll(newIds)` and broadcasts `RecipeBookRemoveS2CPacket(oldIds)`, preventing phantom recipes.
 
+---
+
+## 16. Multi-Loader Porting Architecture: Fabric & NeoForge
+
+Supporting both Fabric and NeoForge loaders without external multi-loader frameworks (such as Architectury or Stonecutter):
+
+### 16.1. Compile-Time Multi-Targeting in Gradle
+* `src/main/` contains universal recipe engine, GUI, inspector, and Mixin logic.
+* `src/neoforge/` contains:
+  * `com.recipeeditor.RecipeEditorNeoForge` annotated with `@Mod("recipeeditor")`.
+  * `net.neoforged.fml.common.Mod` compile-time annotation stub allowing compilation in Fabric Loom without downloading NeoForge tooling.
+  * Lightweight `net.fabricmc.api.*` and `net.fabricmc.loader.api.*` stubs providing safe fallbacks (`FabricLoader.getInstance().getConfigDir()`, `EnvType`, etc.) on NeoForge.
+  * `META-INF/neoforge.mods.toml` mod descriptor.
+* `jarNeoForge` task:
+  * Bundles compiled classes from `sourceSets.main` and `sourceSets.neoforge`.
+  * Excludes Fabric-only entrypoints (`RecipeEditorClient.class`, `ModMenuIntegration.class`, `fabric.mod.json`) and the `@Mod` compile stub (`net/neoforged/**`).
+  * Emits `MrRecipeEditor-NeoForge-<mc_version>-byMr712-v<mod_version>.jar`.
+* `remapJar` produces the pure Fabric JAR `MrRecipeEditor-Fabric-<mc_version>-byMr712-v<mod_version>.jar`.
+* Post-build aggregation automatically deposits both artifacts to `C:\Users\Mr712\Documents\MrRecipeEditor_all_builds/`.

@@ -1,4 +1,4 @@
-# Architectural Blueprint and Technical Specification for [MR] Recipe Editor (Minecraft 1.21 Fabric)
+﻿# Architectural Blueprint and Technical Specification for [MR] Recipe Editor (Minecraft 1.21 Fabric)
 
 This document provides a comprehensive technical blueprint and architectural specification for the **[MR] Recipe Editor** modification for Minecraft 1.21 (Fabric). It is designed for AI agents, system architects, and software engineers who require an exhaustive understanding of every implementation detail: from internal data structures and pattern-matching algorithms to network synchronization, Roughly Enough Items (REI) integration, and low-level bytecode mixins.
 
@@ -19,30 +19,25 @@ The mod fundamentally **does not bundle or inject** any preconfigured custom rec
 * **Minecraft:** 1.21.
 * **Yarn Mappings:** `1.21+build.9`.
 * **Java:** 21 (LTS).
-* **Fabric Loader:** `>= 0.19.5`.
-* **Fabric API:** `0.102.0+1.21`.
+* **Supported Loaders:** Pure Fabric Loader (`>= 0.19.5`) and NeoForge (`>= 1.0.0`).
+* **Fabric API:** `0.102.0+1.21` (for Fabric build).
 * **Fabric Loom:** `1.18-SNAPSHOT`.
 * **Mod Menu:** Declared in `modmenu` entrypoint and strictly required in `depends` (`"modmenu": "*"`) within `fabric.mod.json`.
 * **Roughly Enough Items (REI):** `16.0.729` (declared dependency in `suggests`, official API integration).
 * **Execution Environment:** Client and Integrated Server (Singleplayer / LAN).
 * **Dedicated Server Safety:** A dedicated server environment is detected via `FabricLoader.getInstance().getEnvironmentType() == EnvType.SERVER`. When running on a dedicated server, the mod logs an informative console banner and gracefully disables all runtime features without crashing or interfering with server startup.
 
-### 1.4. Build Instructions and Version Nuances for Minecraft 1.21 / 1.21.1
-1. **Prerequisites & Build Command**:
-   * JDK 21 LTS (or JDK 25).
-   * `./gradlew clean build --console=plain`
-   * Remapped production JAR: `build/libs/MrRecipeEditor-Fabric-1.21-byMr712-v1.4.jar`.
-2. **Key Version Specific Nuances (1.21 & 1.21.1)**:
-   * **Unified RecipeManager:** Minecraft 1.21/1.21.1 uses a unified `net.minecraft.recipe.RecipeManager` (before the split into `ServerRecipeManager` in 1.21.2+). The bytecode hook is `RecipeManagerMixin`.
-   * **Furnace Cooking Recipe Resolution (All 3 Overloads of `getFirstMatch`):**
-     Furnaces, smokers, blast furnaces, and campfires query recipes using `RecipeManager.createCheck(RecipeType)`, which produces a `MatchGetter` caching recipe IDs. The lookup calls `getFirstMatch(type, input, world, Identifier id)` and `getFirstMatch(type, input, world, RecipeEntry last)`.
-     Therefore, `RecipeManagerMixin` must inject into all three overloads (`getFirstMatch(type, input, world)`, `getFirstMatch(..., RecipeEntry)`, and `getFirstMatch(..., Identifier)`) at both `HEAD` (to return custom cooking recipes) and `RETURN` (to filter overridden recipes). Additionally, `get(RecipeType, Identifier)` and `get(Identifier)` must resolve custom synthetic entries by ID.
-   * **Guava ImmutableMap Collision Guard in `SynchronizeRecipesS2CPacket`:**
-     When recipes are synchronized to the client via `SynchronizeRecipesS2CPacket(RecipeManager.values())`, the client builds an `ImmutableMap<Identifier, RecipeEntry<?>>`. If multiple recipes for the same item (such as a crafting recipe and a smelting recipe, or multiple variants) share the exact same ID (`recipeeditor:<item>`), Guava throws `IllegalArgumentException: Multiple entries with same key`.
-     To prevent this, `CustomRecipeDispatcher.getRecipeIdentifier` computes unique composite IDs: `recipeeditor:<cleanId>_<typeSuffix>_<hash>`.
-   * **Multi-Output Smelting Stack Safety:**
-     `AbstractFurnaceBlockEntityMixin` intercepts `canAcceptRecipeOutput` and `craftRecipe` with `SingleStackRecipeInput`, ensuring correct stack size merging and output capping without losing items.
+### 1.4. Build Instructions
+To compile and assemble the mod JARs for Minecraft 1.21:
+``bash
+./gradlew clean build
+``
+or run `build.bat`.
 
+The resulting production artifacts in `build/libs/`:
+* Fabric: `MrRecipeEditor-Fabric-1.21-byMr712-v1.4.jar`
+* NeoForge: `MrRecipeEditor-NeoForge-1.21-byMr712-v1.4.jar`
+(Automatically synced to `C:\Users\Mr712\Documents\MrRecipeEditor_all_builds\`)
 ---
 
 ## 2. High-Level System Architecture
@@ -480,7 +475,7 @@ The mod enforces a strict bilingual requirement for all in-game text:
 * **Minecraft Version:** `1.21`
 * **Java Runtime:** Java 21 LTS (or Java 25)
 * **Mapping Framework:** Yarn mappings (`1.21+build.9`)
-* **Fabric API:** `0.102.0+1.21` / Loom: `1.18-SNAPSHOT`
+* **Fabric API:** `0.102.0+1.21` (for Fabric build) / Loom: `1.18-SNAPSHOT`
 * **Recipe Manager Framework:** Unified `net.minecraft.recipe.RecipeManager` (single class shared by client and server). Intercepted via `RecipeManagerMixin`.
 * **Interaction Model:** Uses temporary `ItemActionResult` for `CampfireBlock.onUseWithItem(ItemStack, BlockState, World, BlockPos, PlayerEntity, Hand, BlockHitResult)`.
 * **Network Recipe Synchronization:** Uses `RecipeBookAddS2CPacket` and `SynchronizeRecipesS2CPacket` with Guava `ImmutableMap` collision-safe composite IDs (`recipeeditor:<cleanId>_<typeSuffix>_<hash>`).
@@ -521,3 +516,23 @@ The mod enforces a strict bilingual requirement for all in-game text:
   - In `CustomRecipeDispatcher.getCustomRecipeEntryById(Identifier id)`, removed fallback query to `RECENTLY_REMOVED_RECIPES.get(id)`.
   - When a campfire cooks an item, `CampfireBlockEntity` caches the last matched recipe ID in its internal `matchGetter`. When querying `recipeManager.get(id)`, `getCustomRecipeEntryById` previously returned the deleted recipe from `RECENTLY_REMOVED_RECIPES`, allowing the campfire to continue accepting and cooking items from deleted crafts until the block entity was reloaded on world rejoin.
   - `RECENTLY_REMOVED_RECIPES` is now kept strictly internal to `syncRecipeBookToPlayers` and `ServerRecipeBookMixin` for book packet generation, ensuring `RecipeManager.get(Identifier)` immediately returns `Optional.empty()` for deleted custom recipes and campfire stops accepting deleted craft items instantly.
+
+---
+
+## 16. Multi-Loader Porting Architecture: Fabric & NeoForge
+
+Supporting both Fabric and NeoForge loaders without external multi-loader frameworks (such as Architectury or Stonecutter):
+
+### 16.1. Compile-Time Multi-Targeting in Gradle
+* `src/main/` contains universal recipe engine, GUI, inspector, and Mixin logic.
+* `src/neoforge/` contains:
+  * `com.recipeeditor.RecipeEditorNeoForge` annotated with `@Mod("recipeeditor")`.
+  * `net.neoforged.fml.common.Mod` compile-time annotation stub allowing compilation in Fabric Loom without downloading NeoForge tooling.
+  * Lightweight `net.fabricmc.api.*` and `net.fabricmc.loader.api.*` stubs providing safe fallbacks (`FabricLoader.getInstance().getConfigDir()`, `EnvType`, etc.) on NeoForge.
+  * `META-INF/neoforge.mods.toml` mod descriptor.
+* `jarNeoForge` task:
+  * Bundles compiled classes from `sourceSets.main` and `sourceSets.neoforge`.
+  * Excludes Fabric-only entrypoints (`RecipeEditorClient.class`, `ModMenuIntegration.class`, `fabric.mod.json`) and the `@Mod` compile stub (`net/neoforged/**`).
+  * Emits `MrRecipeEditor-NeoForge-<mc_version>-byMr712-v<mod_version>.jar`.
+* `remapJar` produces the pure Fabric JAR `MrRecipeEditor-Fabric-<mc_version>-byMr712-v<mod_version>.jar`.
+* Post-build aggregation automatically deposits both artifacts to `C:\Users\Mr712\Documents\MrRecipeEditor_all_builds/`.

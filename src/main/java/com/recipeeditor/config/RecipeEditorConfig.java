@@ -44,7 +44,12 @@ public class RecipeEditorConfig {
     }
 
     public static Path getConfigPath() {
-        Path configDir = FabricLoader.getInstance().getConfigDir();
+        Path configDir;
+        try {
+            configDir = FabricLoader.getInstance().getConfigDir();
+        } catch (Throwable ignored) {
+            configDir = java.nio.file.Paths.get("config");
+        }
         Path newPath = configDir.resolve("mrrecipeeditor.json");
         Path oldPath = configDir.resolve("recipeeditor.json");
         if (!java.nio.file.Files.exists(newPath) && java.nio.file.Files.exists(oldPath)) {

@@ -1,4 +1,4 @@
-﻿# Architectural Blueprint and Technical Specification for [MR] Recipe Editor (Minecraft 1.21.7 Fabric)
+# Architectural Blueprint and Technical Specification for [MR] Recipe Editor (Minecraft 1.21.7 Fabric)
 
 This document provides a comprehensive technical blueprint and architectural specification for the **[MR] Recipe Editor** modification for Minecraft 1.21.7 (Fabric). It is designed for AI agents, system architects, and software engineers who require an exhaustive understanding of every implementation detail: from internal data structures and pattern-matching algorithms to network synchronization, Roughly Enough Items (REI) integration, and low-level bytecode mixins.
 

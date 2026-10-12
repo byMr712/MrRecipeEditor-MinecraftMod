@@ -170,6 +170,19 @@ task copyToAllBuilds {
 
 build.finalizedBy(copyToAllBuilds)
 
+def launcherNeoForgeDir = file("C:/Users/Mr712/AppData/Roaming/ATLauncher/instances/Minecraft263withNeoForge/mods")
+if (launcherNeoForgeDir.exists() && project.minecraft_version == '26.3') {
+    tasks.register('copyToLauncherNeoForge', Copy) {
+        dependsOn jarNeoForge
+        from jarNeoForge.archiveFile
+        into launcherNeoForgeDir
+        doLast {
+            println ">>> Copied ${jarNeoForge.archiveFileName.get()} to ATLauncher NeoForge instance mods folder!"
+        }
+    }
+    build.finalizedBy(copyToLauncherNeoForge)
+}
+
 publishing {
     publications {
         create("mavenJava", MavenPublication) {

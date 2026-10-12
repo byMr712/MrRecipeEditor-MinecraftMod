@@ -27,6 +27,11 @@ repositories {
 }
 
 loom {
+    runs {
+        client {
+            property "fabric.runtimeMappingNamespace", "named"
+        }
+    }
 }
 
 dependencies {
@@ -44,6 +49,7 @@ dependencies {
 
     if (project.hasProperty('modmenu_version') && !project.property('modmenu_version').toString().trim().isEmpty()) {
         modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+        modLocalRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
     }
     if (project.hasProperty('rei_version') && !project.property('rei_version').toString().trim().isEmpty()) {
         modCompileOnly "me.shedaniel:RoughlyEnoughItems-api-fabric:${project.rei_version}"

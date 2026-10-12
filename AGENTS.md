@@ -494,7 +494,7 @@ The mod enforces a strict bilingual requirement for all in-game text:
 
 ### 15.2. Bug Fix Status & Implementation for 26.1.2
 * **Bug 1 (Workstation Recipe Book & Stonecutter Duplication):** **Fixed**.
-  - In `CustomDynamicCraftingRecipe.display()`, returns `Collections.emptyList()` so the mod's datapack serializer entry (`recipeeditor:custom_crafting.json`) does not generate duplicate displays in the client recipe book alongside `CustomRecipeDispatcher`'s synthetic entries.
+  - In `CustomDynamicCraftingRecipe.display()`, returns `Collections.emptyList()`. The legacy dummy datapack recipe entry (`recipeeditor:custom_crafting.json`) is completely removed to ensure clean world loading across both Fabric and NeoForge without triggering `Unknown registry key: recipeeditor:custom_crafting` errors.
   - In `CustomRecipeDispatcher.ensureRecipeBookEntriesUpToDate()`, stonecutting recipes (`recipeData.type == STONECUTTING`) are excluded from `CUSTOM_DISPLAY_PACKET_ENTRIES` sent via `ClientboundRecipeBookAddPacket`, ensuring stonecutter recipes are only synced through `ClientboundUpdateRecipesPacket`.
   - In `ServerRecipeManagerMixin`, `stonecutterRecipes`, `getSynchronizedStonecutterRecipes`, and `getRecipes()` filter out entries with namespace `"recipeeditor"` from `original` before adding custom recipes, preventing dual-entry collisions.
 * **Bug 2 (Variant Index Shift on Blank Target Item):** **Fixed**.

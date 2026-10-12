@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(AbstractFurnaceBlockEntity.class)
 public abstract class AbstractFurnaceBlockEntityMixin {
 
-    @Inject(method = "canAcceptRecipeOutput", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "canAcceptRecipeOutput", at = @At("HEAD"), cancellable = true, require = 0)
     private static void onCanAcceptRecipeOutput(DynamicRegistryManager registryManager, RecipeEntry<? extends AbstractCookingRecipe> recipe, SingleStackRecipeInput input, DefaultedList<ItemStack> slots, int count, CallbackInfoReturnable<Boolean> cir) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
 
@@ -46,7 +46,7 @@ public abstract class AbstractFurnaceBlockEntityMixin {
         cir.setReturnValue(output.getCount() + result.getCount() <= maxAllowed);
     }
 
-    @Inject(method = "craftRecipe", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "craftRecipe", at = @At("HEAD"), cancellable = true, require = 0)
     private static void onCraftRecipe(DynamicRegistryManager registryManager, RecipeEntry<? extends AbstractCookingRecipe> recipe, SingleStackRecipeInput input, DefaultedList<ItemStack> slots, int count, CallbackInfoReturnable<Boolean> cir) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
 

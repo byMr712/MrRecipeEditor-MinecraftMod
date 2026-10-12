@@ -42,7 +42,7 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     def fabricApi = project.findProperty('fabric_api_version') ?: project.findProperty('fabric_version')
     if (fabricApi) {
-        modImplementation "net.fabricmc.fabric-api:fabric-api:${fabricApi}"
+        modLocalRuntime "net.fabricmc.fabric-api:fabric-api:${fabricApi}"
     }
 
     if (project.hasProperty('modmenu_version') && !project.property('modmenu_version').toString().trim().isEmpty()) {

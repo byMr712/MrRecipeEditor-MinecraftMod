@@ -5,7 +5,6 @@ import com.recipeeditor.config.RecipeEditorConfig;
 import com.recipeeditor.recipe.CustomDynamicCraftingRecipe;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
@@ -88,27 +87,5 @@ public class RecipeEditorMod implements ModInitializer {
         }
 
         RecipeEditorConfig.getInstance();
-
-        // Player join recipe book sync on local integrated server
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            try {
-                com.recipeeditor.recipe.CustomRecipeDispatcher.sendCustomRecipeBookEntries(handler.getPlayer());
-            } catch (Exception e) {
-                LOGGER.error("Failed to sync RecipeEditor recipes for player", e);
-            }
-        });
-
-        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            RecipeEditorConfig.getInstance().invalidateAllRecipeCaches();
-        });
-
-        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.END_DATA_PACK_RELOAD
-                .register((server, resourceManager, success) -> {
-                    if (success) {
-                        RecipeEditorConfig.getInstance().invalidateAllRecipeCaches();
-                        com.recipeeditor.recipe.CustomRecipeDispatcher
-                                .syncRecipeBookToPlayers(server.getPlayerManager().getPlayerList());
-                    }
-                });
     }
 }

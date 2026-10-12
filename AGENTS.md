@@ -544,4 +544,38 @@ Supporting both Fabric and NeoForge loaders without external multi-loader framew
   * Emits `MrRecipeEditor-NeoForge-<mc_version>-byMr712-v<mod_version>.jar`.
 * `remapJar` produces the pure Fabric JAR `MrRecipeEditor-Fabric-<mc_version>-byMr712-v<mod_version>.jar`.
 * Post-build aggregation automatically deposits both artifacts to `C:\Users\Mr712\Documents\MrRecipeEditor_all_builds/`.
+---
 
+## 17. Backward Compatibility & Future Update Guidelines (Памятка по обратной совместимости)
+
+To ensure seamless upgrades for players updating from older versions of **[MR] Recipe Editor** without losing custom recipes, corrupting `config/mrrecipeeditor.json`, or encountering world save issues, strictly follow these rules whenever adding new features or modifying data models:
+
+### 17.1. Configuration Schema Evolution (`CustomRecipeData` & `RecipeEditorConfig`)
+The configuration file (`config/mrrecipeeditor.json`) is serialized and deserialized via **Google Gson**.
+1. **Default Field Values (Adding New Primitive/Boolean/String Fields):**
+   * Always initialize new fields with sensible default values directly in `CustomRecipeData` or `RecipeEditorConfig` (e.g., `public boolean allowMirror = true;`, `public int priority = 0;`).
+   * When Gson loads an older config JSON where the new key does not exist, it leaves the default field value intact.
+2. **Null-Safety & Sanitization in `RecipeEditorConfig.validate()` (Adding New Collections/Maps/Objects):**
+   * Whenever a new collection, map, array, or nested object field is introduced in `CustomRecipeData` or `RecipeEditorConfig`, always add a null-check and fallback initialization inside `RecipeEditorConfig.validate()` (just like `patternSlots` and `typeCounts`):
+     ``java
+     if (recipe.newMapField == null) {
+         recipe.newMapField = new HashMap<>();
+     }
+     ``
+   * This prevents `NullPointerException` when reading recipes created in previous mod versions.
+3. **Never Mutate the JSON Type of Existing Fields:**
+   * Do **not** change the data type of an existing serialized field (for example, never change `String[] patternSlots` into a list of objects, or `boolean isShapeless` into an `int` or `enum`).
+   * Doing so causes `JsonSyntaxException` during deserialization, triggering the backup fallback (`recipeeditor.json.bak`) and resetting the active config.
+   * If a richer data structure is needed, add a **new field** with a new name alongside the existing one, and migrate data lazily inside `RecipeEditorConfig.validate()`.
+4. **Deprecating or Removing Fields:**
+   * Gson ignores unknown JSON properties by default. Removing an obsolete Java field will not break loading of older JSON files that still contain that key.
+5. **Key Format Changes & Automatic Re-Keying:**
+   * `RecipeEditorConfig.validate()` iterates over all loaded recipes and rebuilds the map using `rekeyed.put(recipe.getKey(), recipe)`. Even if the composite key format in `CustomRecipeData.getKey()` is extended in a future update, all existing recipes are automatically re-indexed on startup.
+   * Legacy file names (`config/recipeeditor.json`) are automatically migrated to `config/mrrecipeeditor.json` in `getConfigPath()`.
+
+### 17.2. World Save & Player Data (`playerdata/<uuid>.dat`) Safety
+1. **Zero Custom NBT / Component Lock-In on Items:**
+   * Items crafted via custom recipes produce standard vanilla or modded `ItemStack` instances without proprietary mod components. Updating or even removing the mod never corrupts world saves, chests, or player inventories.
+2. **Stale Recipe Book Identifiers (`recipeeditor:dynamic_*`):**
+   * If a future update changes how dynamic recipe IDs (`recipeeditor:dynamic_<item>_<hash>`) are hashed or generated, players' saved recipe books (`known` and `highlight` lists in `level.dat` / `playerdata`) may reference old IDs.
+   * `ServerRecipeBookMixin` (`loadUntrusted` / `fromNbt`) intercepts and silently skips any unrecognized `recipeeditor:*` recipe keys on world load without logging `[Server thread/ERROR]` messages, while active recipes are freshly synchronized to the client via `sendInitialRecipeBook` / `sendInitRecipesPacket`.

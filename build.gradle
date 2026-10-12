@@ -137,6 +137,77 @@ task jarNeoForge(type: Jar) {
         include "recipeeditor.mixins.json"
     }
     from("LICENSE")
+
+    doLast {
+        if (project.hasProperty('yarn_mappings') && !project.property('yarn_mappings').toString().trim().isEmpty()) {
+            def jarPath = archiveFile.get().asFile.toPath()
+            def tmpIntermediary = java.nio.file.Files.createTempFile("neoforge-intermediary-", ".jar")
+            def tmpMojang = java.nio.file.Files.createTempFile("neoforge-mojang-", ".jar")
+            java.nio.file.Files.deleteIfExists(tmpIntermediary)
+            java.nio.file.Files.deleteIfExists(tmpMojang)
+
+            def loomCacheVerDir = new File(gradle.gradleUserHomeDir, "caches/fabric-loom/${project.minecraft_version}")
+            def yarnTiny = fileTree(loomCacheVerDir).matching { include "net.fabricmc.yarn*/**/mappings.tiny" }.files.sort().last().toPath()
+            def mojTinyFiles = fileTree(loomCacheVerDir).matching { include "loom.mappings.*2198*/**/mappings.tiny" }.files.sort()
+            if (mojTinyFiles.isEmpty()) {
+                configurations.detachedConfiguration(loom.officialMojangMappings()).resolve()
+                mojTinyFiles = fileTree(loomCacheVerDir).matching { include "loom.mappings.*/**/mappings.tiny" }.files.sort()
+            }
+            def mojTiny = mojTinyFiles.first().toPath()
+            def interMc = fileTree(new File(gradle.gradleUserHomeDir, "caches/fabric-loom/minecraftMaven")).matching {
+                include "**/minecraft-merged-intermediary-${project.minecraft_version}-*.jar"
+            }.files.sort().last().toPath()
+            def cpPaths = sourceSets.main.compileClasspath.files.findAll { it.exists() }.collect { it.toPath() } as java.nio.file.Path[]
+
+            try {
+                def remapper1 = net.fabricmc.tinyremapper.TinyRemapper.newRemapper()
+                        .withMappings(net.fabricmc.tinyremapper.TinyUtils.createTinyMappingProvider(yarnTiny, "named", "intermediary"))
+                        .ignoreFieldDesc(true)
+                        .ignoreConflicts(true)
+                        .extension(new net.fabricmc.tinyremapper.extension.mixin.MixinExtension())
+                        .build()
+                try {
+                    def out1 = new net.fabricmc.tinyremapper.OutputConsumerPath.Builder(tmpIntermediary).build()
+                    try {
+                        out1.addNonClassFiles(jarPath, net.fabricmc.tinyremapper.NonClassCopyMode.FIX_META_INF, remapper1)
+                        remapper1.readInputs(jarPath)
+                        remapper1.readClassPath(cpPaths)
+                        remapper1.apply(out1)
+                    } finally {
+                        out1.close()
+                    }
+                } finally {
+                    remapper1.finish()
+                }
+
+                def remapper2 = net.fabricmc.tinyremapper.TinyRemapper.newRemapper()
+                        .withMappings(net.fabricmc.tinyremapper.TinyUtils.createTinyMappingProvider(mojTiny, "intermediary", "named"))
+                        .ignoreFieldDesc(true)
+                        .ignoreConflicts(true)
+                        .extension(new net.fabricmc.tinyremapper.extension.mixin.MixinExtension())
+                        .build()
+                try {
+                    def out2 = new net.fabricmc.tinyremapper.OutputConsumerPath.Builder(tmpMojang).build()
+                    try {
+                        out2.addNonClassFiles(tmpIntermediary, net.fabricmc.tinyremapper.NonClassCopyMode.FIX_META_INF, remapper2)
+                        remapper2.readInputs(tmpIntermediary)
+                        remapper2.readClassPath([interMc] as java.nio.file.Path[])
+                        remapper2.apply(out2)
+                    } finally {
+                        out2.close()
+                    }
+                } finally {
+                    remapper2.finish()
+                }
+
+                java.nio.file.Files.move(tmpMojang, jarPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                println ">>> Remapped ${archiveFileName.get()} from Yarn to Official Mojang Mappings for NeoForge!"
+            } finally {
+                java.nio.file.Files.deleteIfExists(tmpIntermediary)
+                java.nio.file.Files.deleteIfExists(tmpMojang)
+            }
+        }
+    }
 }
 
 build.dependsOn(jarNeoForge)

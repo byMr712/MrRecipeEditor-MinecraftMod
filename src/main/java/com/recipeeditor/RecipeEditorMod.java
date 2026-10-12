@@ -22,13 +22,38 @@ public class RecipeEditorMod implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public static boolean isDedicatedServer() {
-        return FabricLoader.getInstance().getEnvironmentType() == EnvType.SERVER;
+        try {
+            return FabricLoader.getInstance().getEnvironmentType() == EnvType.SERVER;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
-    public static final RecipeSerializer<CustomDynamicCraftingRecipe> RECIPE_SERIALIZER = Registry.register(
-            Registries.RECIPE_SERIALIZER,
-            Identifier.of(MOD_ID, "custom_crafting"),
-            new RecipeSerializer<CustomDynamicCraftingRecipe>() {
+    public static final RecipeSerializer<CustomDynamicCraftingRecipe> RECIPE_SERIALIZER;
+    static {
+        RecipeSerializer<CustomDynamicCraftingRecipe> ser;
+        try {
+            ser = Registry.register(
+                    Registries.RECIPE_SERIALIZER,
+                    Identifier.of(MOD_ID, "custom_crafting"),
+                    new RecipeSerializer<CustomDynamicCraftingRecipe>() {
+                        private final MapCodec<CustomDynamicCraftingRecipe> CODEC = MapCodec
+                                .unit(() -> new CustomDynamicCraftingRecipe(CraftingRecipeCategory.MISC));
+                        private final PacketCodec<RegistryByteBuf, CustomDynamicCraftingRecipe> PACKET_CODEC = PacketCodec
+                                .unit(new CustomDynamicCraftingRecipe(CraftingRecipeCategory.MISC));
+
+                        @Override
+                        public MapCodec<CustomDynamicCraftingRecipe> codec() {
+                            return CODEC;
+                        }
+
+                        @Override
+                        public PacketCodec<RegistryByteBuf, CustomDynamicCraftingRecipe> packetCodec() {
+                            return PACKET_CODEC;
+                        }
+                    });
+        } catch (Throwable t) {
+            ser = new RecipeSerializer<CustomDynamicCraftingRecipe>() {
                 private final MapCodec<CustomDynamicCraftingRecipe> CODEC = MapCodec
                         .unit(() -> new CustomDynamicCraftingRecipe(CraftingRecipeCategory.MISC));
                 private final PacketCodec<RegistryByteBuf, CustomDynamicCraftingRecipe> PACKET_CODEC = PacketCodec
@@ -43,7 +68,10 @@ public class RecipeEditorMod implements ModInitializer {
                 public PacketCodec<RegistryByteBuf, CustomDynamicCraftingRecipe> packetCodec() {
                     return PACKET_CODEC;
                 }
-            });
+            };
+        }
+        RECIPE_SERIALIZER = ser;
+    }
 
     @Override
     public void onInitialize() {

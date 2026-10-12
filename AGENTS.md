@@ -19,7 +19,7 @@ The mod fundamentally **does not bundle or inject** any preconfigured custom rec
 * **Minecraft:** 26.1.
 * **Java:** 25.
 * **Supported Loaders:** Pure Fabric Loader (`>= 0.19.5`) and NeoForge (`>= 1.0.0`).
-* **Fabric API:** `0.145.1+26.1` (for Fabric build).
+* **Fabric API:** **Not required (Zero-dependency standalone mod)**. Runs on pure Fabric Loader without requiring Fabric API; all lifecycle, networking, and recipe sync logic is driven directly by native vanilla Mixins (`ServerRecipeBookMixin`, `ServerRecipeManagerMixin`, etc.).
 * **Fabric Loom:** `1.18-SNAPSHOT`.
 * **Mod Menu:** Declared in `modmenu` entrypoint and strictly required in `depends` (`"modmenu": "*"`) within `fabric.mod.json`.
 * **Roughly Enough Items (REI):** `18.0.815` (declared dependency in `suggests`, official API integration).

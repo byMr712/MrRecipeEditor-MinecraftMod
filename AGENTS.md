@@ -526,10 +526,14 @@ The mod enforces a strict bilingual requirement for all in-game text:
 * **Bug 8 (Cannot Place Custom Recipe Item on Campfire):** **Fixed**.
   - In `CampfireBlockMixin`, removed `LIT` and sneaking checks.
   - Unconditionally return `InteractionResult.CONSUME` on client and server fallback.
-* **Bug 9 (Smithing Table Craft Execution & Tag Ingredient Resolution in 26.X):** **Fixed**.
-  - In `CustomDynamicSmithingRecipe.assemble(SmithingRecipeInput)`, replaced raw `crafted.applyComponents(baseStack.getComponents())` with vanilla Minecraft 26.X transmutation: `TransmuteRecipe.createWithOriginalComponents(new ItemStackTemplate(this.resultStack.getItem(), this.resultStack.getCount()), baseStack)`. This properly preserves enchantments, custom names, durability damage, and repair cost from the base item without corrupting the output item's model, base attributes, or identity.
-  - In `CustomRecipeData.computeIngredientForSlot(int slot)`, added a fallback to `TagResolver.getAllItemsForTag(slotStr)` when `BuiltInRegistries.ITEM.get(tagKey)` returns `Optional.empty()` (as dynamic datapack tags are not stored in the static item registry in 26.X), ensuring smithing recipes with tag ingredients (e.g., templates or additions) match and craft reliably.
-  - In `TagResolver.getAllItemsForTag`, wrapped `FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT` in a safe `try-catch` guard.
+* **Bug 9 (Smithing Table Craft Execution & Strict Transmutation Fallback in 26.X):** **Fixed**.
+  - In `CustomDynamicSmithingRecipe.assemble(SmithingRecipeInput)`, `TransmuteRecipe.createWithOriginalComponents(...)` validates components strictly via `ItemStack.validateStrict`. When upgrading non-standard items or mismatched component sets, `validateStrict` fails and returns `ItemStack.EMPTY` without throwing an exception. Previously, this caused `assemble()` to return `EMPTY`, leaving the smithing table result slot blank despite valid inputs.
+  - *Fix:* `assemble()` checks `if (transmuted != null && !transmuted.isEmpty()) return transmuted;`, falling back cleanly to `return this.resultStack.copy();`.
+  - In `CustomRecipeDispatcher.matchesInput()` and `CustomDynamicSmithingRecipe`, empty template and addition ingredients are converted to `Optional.empty()` and tested safely (`(templateIng == null || templateIng.isEmpty()) && smithing.template().isEmpty()`), preventing empty ingredients from failing matching on empty slots.
+* **Bug 10 (Console Error Spam on World Rejoin for Removed/Outdated Custom Recipes):** **Fixed**.
+  - When custom recipes are modified or removed in the editor, their previous dynamic identifiers (`recipeeditor:dynamic_<id>_<hash>`) remain stored in the player's saved data (`packed.known` and `packed.highlight`).
+  - Upon rejoining the world, `ServerRecipeBook.loadUntrusted()` tests keys against `RecipeManager.byKey(key).isPresent()`. When absent, vanilla `ServerRecipeBook.loadRecipes()` logged `[Server thread/ERROR]: Tried to load unrecognized recipe: ... removed now.` repeatedly for both known and highlight lists.
+  - *Fix:* Injected into `ServerRecipeBook.loadUntrusted` (`@At("HEAD")`, cancellable) in `ServerRecipeBookMixin`. Unrecognized keys under namespace `"recipeeditor"` are silently skipped without logging errors, while standard error logging is preserved for vanilla and datapack recipes.
 
 ---
 

@@ -24,9 +24,9 @@ public class CustomDynamicSmithingRecipe implements SmithingRecipe {
 
     public CustomDynamicSmithingRecipe(String group, Optional<Ingredient> template, Optional<Ingredient> base, Optional<Ingredient> addition, ItemStack resultStack) {
         this.group = group != null ? group : "";
-        this.template = template != null ? template : Optional.empty();
+        this.template = template != null && template.isPresent() && !template.get().isEmpty() ? template : Optional.empty();
         this.base = base != null && base.isPresent() && !base.get().isEmpty() ? base.get() : Ingredient.of(Items.BARRIER);
-        this.addition = addition != null ? addition : Optional.empty();
+        this.addition = addition != null && addition.isPresent() && !addition.get().isEmpty() ? addition : Optional.empty();
         this.resultStack = resultStack != null ? resultStack : ItemStack.EMPTY;
     }
 
@@ -46,10 +46,13 @@ public class CustomDynamicSmithingRecipe implements SmithingRecipe {
         ItemStack baseStack = input != null ? input.base() : ItemStack.EMPTY;
         if (!baseStack.isEmpty()) {
             try {
-                return TransmuteRecipe.createWithOriginalComponents(
+                ItemStack transmuted = TransmuteRecipe.createWithOriginalComponents(
                         new ItemStackTemplate(this.resultStack.getItem(), this.resultStack.getCount()),
                         baseStack
                 );
+                if (transmuted != null && !transmuted.isEmpty()) {
+                    return transmuted;
+                }
             } catch (Throwable ignored) {}
         }
         return this.resultStack.copy();

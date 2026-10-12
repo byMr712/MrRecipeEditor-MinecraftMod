@@ -452,12 +452,13 @@ public class CustomRecipeDispatcher {
             Ingredient baseIng = data.getIngredientAt(1);
             Ingredient additionIng = data.getIngredientAt(2);
 
-            boolean matchTemplate = (templateIng == null && smithing.template().isEmpty()) ||
-                    (templateIng != null && templateIng.test(smithing.template()));
-            boolean matchBase = (baseIng == null && smithing.base().isEmpty()) ||
-                    (baseIng != null && baseIng.test(smithing.base()));
-            boolean matchAddition = (additionIng == null && smithing.addition().isEmpty()) ||
-                    (additionIng != null && additionIng.test(smithing.addition()));
+            if (baseIng == null || baseIng.isEmpty()) return false;
+
+            boolean matchTemplate = ((templateIng == null || templateIng.isEmpty()) && smithing.template().isEmpty()) ||
+                    (templateIng != null && !templateIng.isEmpty() && templateIng.test(smithing.template()));
+            boolean matchBase = baseIng.test(smithing.base());
+            boolean matchAddition = ((additionIng == null || additionIng.isEmpty()) && smithing.addition().isEmpty()) ||
+                    (additionIng != null && !additionIng.isEmpty() && additionIng.test(smithing.addition()));
 
             return matchTemplate && matchBase && matchAddition;
         }

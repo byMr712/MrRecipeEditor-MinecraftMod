@@ -29,14 +29,26 @@ public class RecipeEditorMod implements ModInitializer {
         }
     }
 
-    public static final RecipeSerializer<CustomDynamicCraftingRecipe> CUSTOM_CRAFTING_SERIALIZER = Registry.register(
-            BuiltInRegistries.RECIPE_SERIALIZER,
-            Identifier.fromNamespaceAndPath(MOD_ID, "custom_crafting"),
-            new RecipeSerializer<>(
+    public static final RecipeSerializer<CustomDynamicCraftingRecipe> CUSTOM_CRAFTING_SERIALIZER;
+    static {
+        RecipeSerializer<CustomDynamicCraftingRecipe> serializer;
+        try {
+            serializer = Registry.register(
+                    BuiltInRegistries.RECIPE_SERIALIZER,
+                    Identifier.fromNamespaceAndPath(MOD_ID, "custom_crafting"),
+                    new RecipeSerializer<>(
+                            MapCodec.unit(() -> new CustomDynamicCraftingRecipe(CraftingBookCategory.MISC)),
+                            StreamCodec.unit(new CustomDynamicCraftingRecipe(CraftingBookCategory.MISC))
+                    )
+            );
+        } catch (Throwable t) {
+            serializer = new RecipeSerializer<>(
                     MapCodec.unit(() -> new CustomDynamicCraftingRecipe(CraftingBookCategory.MISC)),
                     StreamCodec.unit(new CustomDynamicCraftingRecipe(CraftingBookCategory.MISC))
-            )
-    );
+            );
+        }
+        CUSTOM_CRAFTING_SERIALIZER = serializer;
+    }
 
     @Override
     public void onInitialize() {

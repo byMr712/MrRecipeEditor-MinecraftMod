@@ -5,12 +5,9 @@ import dev.architectury.event.EventResult;
 import me.shedaniel.rei.api.client.REIRuntime;
 import me.shedaniel.rei.api.client.plugins.REIClientPlugin;
 import me.shedaniel.rei.api.client.registry.display.DisplayRegistry;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.recipe.RecipeEntry;
 import net.minecraft.util.Identifier;
 
-@Environment(EnvType.CLIENT)
 public class RecipeEditorReiClientPlugin implements REIClientPlugin {
 
     @Override

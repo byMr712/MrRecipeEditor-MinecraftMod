@@ -14,7 +14,11 @@ public class RecipeEditorNeoForge {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public RecipeEditorNeoForge(ModContainer modContainer) {
-        RecipeEditorConfig.getInstance();
+        RecipeEditorMod.init();
+        if (RecipeEditorMod.isClient()) {
+            com.recipeeditor.integration.RecipeViewerIntegration.init();
+            com.recipeeditor.inspector.RecipeInspector.startJarScanAsync();
+        }
         LOGGER.info("[MR] Recipe Editor (NeoForge) initialized successfully!");
         if (modContainer != null) {
             try {

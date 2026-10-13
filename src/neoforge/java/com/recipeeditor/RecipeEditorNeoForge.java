@@ -1,7 +1,8 @@
 package com.recipeeditor;
 
 import com.recipeeditor.client.gui.RecipeEditorScreen;
-import com.recipeeditor.config.RecipeEditorConfig;
+import com.recipeeditor.inspector.RecipeInspector;
+import com.recipeeditor.integration.RecipeViewerIntegration;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
@@ -14,7 +15,13 @@ public class RecipeEditorNeoForge {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public RecipeEditorNeoForge(ModContainer modContainer) {
-        RecipeEditorConfig.getInstance();
+        RecipeEditorMod.init();
+        if (RecipeEditorMod.isClient()) {
+            try {
+                RecipeViewerIntegration.init();
+                RecipeInspector.startJarScanAsync();
+            } catch (Throwable ignored) {}
+        }
         LOGGER.info("[MR] Recipe Editor (NeoForge) initialized successfully!");
         if (modContainer != null) {
             try {

@@ -15,7 +15,7 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "com.recipeeditor.RecipeEditorMod"
+      "com.recipeeditor.client.RecipeEditorClient"
     ],
     "client": [
       "com.recipeeditor.client.RecipeEditorClient"

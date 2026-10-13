@@ -1,7 +1,7 @@
 package com.recipeeditor.integration;
 
+import com.recipeeditor.RecipeEditorMod;
 import com.recipeeditor.recipe.CustomRecipeDispatcher;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.recipe.RecipeEntry;
@@ -52,7 +52,7 @@ public class RecipeViewerIntegration {
     }
 
     private static synchronized void registerReiVisibilityPredicate() {
-        if (reiPredicateRegistered || !FabricLoader.getInstance().isModLoaded("roughlyenoughitems")) return;
+        if (reiPredicateRegistered || !RecipeEditorMod.isModLoaded("roughlyenoughitems")) return;
         try {
             Class<?> displayRegistryClass = Class.forName("me.shedaniel.rei.api.client.registry.display.DisplayRegistry");
             Object registry = displayRegistryClass.getMethod("getInstance").invoke(null);
@@ -211,7 +211,7 @@ public class RecipeViewerIntegration {
         isReloading.set(true);
         lastReloadStartTime = System.currentTimeMillis();
 
-        if (FabricLoader.getInstance().isModLoaded("roughlyenoughitems")) {
+        if (RecipeEditorMod.isModLoaded("roughlyenoughitems")) {
             try {
                 Class<?> reiRuntimeClass = Class.forName("me.shedaniel.rei.api.client.REIRuntime");
                 Object instance = reiRuntimeClass.getMethod("getInstance").invoke(null);
@@ -235,7 +235,7 @@ public class RecipeViewerIntegration {
     }
 
     private static boolean isAnyViewerReloading() {
-        if (FabricLoader.getInstance().isModLoaded("roughlyenoughitems")) {
+        if (RecipeEditorMod.isModLoaded("roughlyenoughitems")) {
             try {
                 Class<?> pmClass = Class.forName("me.shedaniel.rei.api.common.plugins.PluginManager");
                 try {

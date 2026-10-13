@@ -42,7 +42,7 @@ public class AbstractFurnaceScreenHandlerMixin {
                     if (match.isEmpty()) {
                         cir.setReturnValue(false);
                     }
-                } else if (net.fabricmc.loader.api.FabricLoader.getInstance().getEnvironmentType() == net.fabricmc.api.EnvType.CLIENT) {
+                } else if (com.recipeeditor.RecipeEditorMod.isClient()) {
                     RecipeTypeEnum typeEnum = RecipeTypeEnum.fromRecipeType(this.recipeType);
                     if (typeEnum != null && RecipeInspector.isCookingInputOverridden(typeEnum, itemStack.getItem(), this.level)) {
                         cir.setReturnValue(false);

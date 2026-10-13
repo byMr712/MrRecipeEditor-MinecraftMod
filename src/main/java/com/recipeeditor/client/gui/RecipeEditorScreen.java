@@ -6,8 +6,6 @@ import com.recipeeditor.config.RecipeEditorConfig;
 import com.recipeeditor.config.RecipeTypeEnum;
 import com.recipeeditor.inspector.RecipeInspector;
 import com.recipeeditor.inspector.RecipeStatus;
-import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -220,9 +218,9 @@ public class RecipeEditorScreen extends Screen {
     }
 
     private String getFriendlyModName(String namespace) {
-        Optional<ModContainer> container = FabricLoader.getInstance().getModContainer(namespace);
-        if (container.isPresent()) {
-            return container.get().getMetadata().getName();
+        Optional<String> modName = RecipeEditorMod.getModDisplayName(namespace);
+        if (modName.isPresent()) {
+            return modName.get();
         }
         if (!namespace.isEmpty()) {
             return Character.toUpperCase(namespace.charAt(0)) + namespace.substring(1);

@@ -5,14 +5,11 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.recipeeditor.RecipeEditorMod;
 import com.recipeeditor.config.CustomRecipeData;
 import com.recipeeditor.config.RecipeEditorConfig;
 import com.recipeeditor.config.RecipeTypeEnum;
 import com.recipeeditor.recipe.CustomRecipeDispatcher;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
-import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
@@ -62,7 +59,7 @@ public class RecipeInspector {
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
                 scanFabricModJars();
-                if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+                if (RecipeEditorMod.isClient()) {
                     ClientLangHelper.indexDiskAssetLanguages();
                 }
                 indexCurrentLanguage();
@@ -80,7 +77,7 @@ public class RecipeInspector {
 
     /** Indexes all launcher disk assets and ResourceManager translation storages async. */
     public static synchronized void startLangIndexViaRMAsync() {
-        if (FabricLoader.getInstance().getEnvironmentType() != EnvType.CLIENT) return;
+        if (!RecipeEditorMod.isClient()) return;
         if (langIndexedViaRM) return;
         langIndexedViaRM = true;
         java.util.concurrent.CompletableFuture.runAsync(() -> {
@@ -146,7 +143,7 @@ public class RecipeInspector {
         }
 
         // 3. Scan Client Recipe Book / Integrated server (if on Client)
-        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+        if (RecipeEditorMod.isClient()) {
             if (ClientLangHelper.initFromClient(world)) {
                 finishCacheInitialization();
                 return;
@@ -168,37 +165,31 @@ public class RecipeInspector {
     }
 
     private static void scanFabricModJars() {
-        for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
-            try {
-                Optional<Path> dataDir = mod.findPath("data");
-                if (dataDir.isPresent()) {
-                    try (Stream<Path> stream = Files.walk(dataDir.get())) {
-                        stream.filter(p -> {
-                            String s = p.toString().replace('\\', '/').toLowerCase(Locale.ROOT);
-                            return s.endsWith(".json") && (
-                                    s.contains("/recipe/") || s.contains("/recipes/") ||
-                                    s.contains("/tags/item/") || s.contains("/tags/items/")
-                            );
-                        }).forEach(p -> {
-                            String s = p.toString().replace('\\', '/').toLowerCase(Locale.ROOT);
-                            if (s.contains("/tags/item/") || s.contains("/tags/items/")) {
-                                TagResolver.parseTagJson(p);
-                            } else {
-                                parseModRecipeJson(p);
-                            }
-                        });
+        for (Path dataDir : RecipeEditorMod.getAllModSubPaths("data")) {
+            try (Stream<Path> stream = Files.walk(dataDir)) {
+                stream.filter(p -> {
+                    String s = p.toString().replace('\\', '/').toLowerCase(Locale.ROOT);
+                    return s.endsWith(".json") && (
+                            s.contains("/recipe/") || s.contains("/recipes/") ||
+                            s.contains("/tags/item/") || s.contains("/tags/items/")
+                    );
+                }).forEach(p -> {
+                    String s = p.toString().replace('\\', '/').toLowerCase(Locale.ROOT);
+                    if (s.contains("/tags/item/") || s.contains("/tags/items/")) {
+                        TagResolver.parseTagJson(p);
+                    } else {
+                        parseModRecipeJson(p);
                     }
-                }
-                // Scan lang files (assets/<ns>/lang/*.json) for multilingual item name index
-                Optional<Path> assetsDir = mod.findPath("assets");
-                if (assetsDir.isPresent()) {
-                    try (Stream<Path> stream = Files.walk(assetsDir.get())) {
-                        stream.filter(p -> {
-                            String s = p.toString().replace('\\', '/').toLowerCase(Locale.ROOT);
-                            return s.endsWith(".json") && s.contains("/lang/");
-                        }).forEach(RecipeInspector::parseLangJson);
-                    }
-                }
+                });
+            } catch (Exception ignored) {}
+        }
+        // Scan lang files (assets/<ns>/lang/*.json) for multilingual item name index
+        for (Path assetsDir : RecipeEditorMod.getAllModSubPaths("assets")) {
+            try (Stream<Path> stream = Files.walk(assetsDir)) {
+                stream.filter(p -> {
+                    String s = p.toString().replace('\\', '/').toLowerCase(Locale.ROOT);
+                    return s.endsWith(".json") && s.contains("/lang/");
+                }).forEach(RecipeInspector::parseLangJson);
             } catch (Exception ignored) {}
         }
     }
@@ -336,7 +327,6 @@ public class RecipeInspector {
         }
     }
 
-    @Environment(EnvType.CLIENT)
     private static class ClientLangHelper {
         static boolean initFromClient(Level world) {
             Minecraft client = Minecraft.getInstance();
@@ -1602,9 +1592,9 @@ public class RecipeInspector {
         if (namespace == null || namespace.isEmpty() || namespace.equals("minecraft")) {
             return "Minecraft";
         }
-        Optional<ModContainer> container = FabricLoader.getInstance().getModContainer(namespace);
-        if (container.isPresent()) {
-            return container.get().getMetadata().getName();
+        Optional<String> modName = RecipeEditorMod.getModDisplayName(namespace);
+        if (modName.isPresent()) {
+            return modName.get();
         }
         return Character.toUpperCase(namespace.charAt(0)) + namespace.substring(1);
     }

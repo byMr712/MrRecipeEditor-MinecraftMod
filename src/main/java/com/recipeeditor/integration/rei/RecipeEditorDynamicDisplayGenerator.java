@@ -21,8 +21,6 @@ import me.shedaniel.rei.plugin.common.displays.cooking.DefaultSmeltingDisplay;
 import me.shedaniel.rei.plugin.common.displays.cooking.DefaultSmokingDisplay;
 import me.shedaniel.rei.plugin.common.displays.crafting.DefaultCustomShapedDisplay;
 import me.shedaniel.rei.plugin.common.displays.crafting.DefaultCustomShapelessDisplay;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -32,7 +30,6 @@ import net.minecraft.util.Identifier;
 
 import java.util.*;
 
-@Environment(EnvType.CLIENT)
 public class RecipeEditorDynamicDisplayGenerator implements DynamicDisplayGenerator<Display> {
 
     @Override

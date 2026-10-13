@@ -3,7 +3,6 @@ package com.recipeeditor.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.recipeeditor.RecipeEditorMod;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
@@ -44,12 +43,7 @@ public class RecipeEditorConfig {
     }
 
     public static Path getConfigPath() {
-        Path configDir;
-        try {
-            configDir = FabricLoader.getInstance().getConfigDir();
-        } catch (Throwable ignored) {
-            configDir = java.nio.file.Paths.get("config");
-        }
+        Path configDir = RecipeEditorMod.getConfigDir();
         Path newPath = configDir.resolve("mrrecipeeditor.json");
         Path oldPath = configDir.resolve("recipeeditor.json");
         if (!java.nio.file.Files.exists(newPath) && java.nio.file.Files.exists(oldPath)) {

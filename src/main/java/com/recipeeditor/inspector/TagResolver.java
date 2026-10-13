@@ -14,9 +14,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
-import net.fabricmc.loader.api.FabricLoader;
+import com.recipeeditor.RecipeEditorMod;
 
 import java.io.Reader;
 import java.nio.file.Files;
@@ -151,7 +149,7 @@ public class TagResolver {
         Set<Item> items = new LinkedHashSet<>();
 
         try {
-            if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+            if (RecipeEditorMod.isClient()) {
                 ClientTagHelper.queryClientWorldTags(tagId, items);
             }
         } catch (Throwable ignored) {}
@@ -285,7 +283,7 @@ public class TagResolver {
         if (visited.contains(tagId)) return Items.AIR;
         visited.add(tagId);
 
-        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+        if (RecipeEditorMod.isClient()) {
             Item clientItem = ClientTagHelper.queryClientWorldTag(tagId);
             if (clientItem != Items.AIR) {
                 return clientItem;
@@ -384,7 +382,6 @@ public class TagResolver {
         return Items.AIR;
     }
 
-    @Environment(EnvType.CLIENT)
     private static class ClientTagHelper {
         static void queryClientWorldTags(String tagId, Set<Item> outItems) {
             try {

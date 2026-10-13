@@ -12,10 +12,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
-import net.fabricmc.loader.api.FabricLoader;
+import com.recipeeditor.RecipeEditorMod;
 
 import java.io.Reader;
 import java.nio.file.Files;
@@ -159,7 +156,7 @@ public class TagResolver {
         Set<Item> items = new LinkedHashSet<>();
 
         // 1. World dynamic registry entries (if in-world on client)
-        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+        if (RecipeEditorMod.isClient()) {
             ClientTagHelper.queryClientWorldTags(tagId, items);
         }
 
@@ -302,7 +299,7 @@ public class TagResolver {
         visited.add(tagId);
 
         // 1. Try world registry (when inside active world on client)
-        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+        if (RecipeEditorMod.isClient()) {
             Item clientItem = ClientTagHelper.queryClientWorldTag(tagId);
             if (clientItem != Items.AIR) {
                 return clientItem;
@@ -405,7 +402,6 @@ public class TagResolver {
         return Items.AIR;
     }
 
-    @Environment(EnvType.CLIENT)
     private static class ClientTagHelper {
         static void queryClientWorldTags(String tagId, Set<Item> outItems) {
             try {

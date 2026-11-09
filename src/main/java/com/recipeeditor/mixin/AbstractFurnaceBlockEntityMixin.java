@@ -1,13 +1,11 @@
 package com.recipeeditor.mixin;
 
-import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.recipe.AbstractCookingRecipe;
-import net.minecraft.recipe.RecipeEntry;
-import net.minecraft.recipe.input.SingleStackRecipeInput;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.util.collection.DefaultedList;
+import net.minecraft.core.NonNullList;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.AbstractCookingRecipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,19 +14,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(AbstractFurnaceBlockEntity.class)
 public abstract class AbstractFurnaceBlockEntityMixin {
 
-    @Inject(method = "canAcceptRecipeOutput", at = @At("HEAD"), cancellable = true, require = 0)
-    private static void onCanAcceptRecipeOutput(DynamicRegistryManager registryManager, RecipeEntry<? extends AbstractCookingRecipe> recipe, DefaultedList<ItemStack> slots, int count, CallbackInfoReturnable<Boolean> cir) {
+    @Inject(method = "canBurn", at = @At("HEAD"), cancellable = true, require = 0)
+    private static void onCanBurn(RegistryAccess registryManager, RecipeHolder<? extends AbstractCookingRecipe> recipe, NonNullList<ItemStack> slots, int count, CallbackInfoReturnable<Boolean> cir) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
 
-        if (slots.get(0).isEmpty() || recipe == null) {
-            cir.setReturnValue(false);
+        if (slots == null || slots.isEmpty() || recipe == null) {
             return;
         }
 
-        SingleStackRecipeInput input = new SingleStackRecipeInput(slots.get(0));
-        ItemStack result = recipe.value().craft(input, registryManager);
+        ItemStack input = slots.get(0);
+        if (input.isEmpty()) {
+            return;
+        }
+
+        ItemStack result = recipe.value().assemble(new net.minecraft.world.item.crafting.SingleRecipeInput(input), registryManager);
         if (result.isEmpty()) {
-            cir.setReturnValue(false);
             return;
         }
 
@@ -38,67 +38,63 @@ public abstract class AbstractFurnaceBlockEntityMixin {
             return;
         }
 
-        if (!ItemStack.areItemsAndComponentsEqual(output, result)) {
+        if (!ItemStack.isSameItemSameComponents(output, result)) {
             cir.setReturnValue(false);
             return;
         }
 
-        int maxAllowed = Math.min(count, Math.min(output.getMaxCount(), result.getMaxCount()));
+        int maxAllowed = Math.min(output.getMaxStackSize(), count);
         cir.setReturnValue(output.getCount() + result.getCount() <= maxAllowed);
     }
 
-    @Inject(method = "craftRecipe", at = @At("HEAD"), cancellable = true, require = 0)
-    private static void onCraftRecipe(DynamicRegistryManager registryManager, RecipeEntry<? extends AbstractCookingRecipe> recipe, DefaultedList<ItemStack> slots, int count, CallbackInfoReturnable<Boolean> cir) {
+    @Inject(method = "burn", at = @At("HEAD"), cancellable = true, require = 0)
+    private static void onBurn(RegistryAccess registryManager, RecipeHolder<? extends AbstractCookingRecipe> recipe, NonNullList<ItemStack> slots, int count, CallbackInfoReturnable<Boolean> cir) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
 
-        if (recipe == null || slots.get(0).isEmpty()) {
-            cir.setReturnValue(false);
+        if (slots == null || slots.isEmpty() || recipe == null) {
             return;
-        }
-
-        SingleStackRecipeInput input = new SingleStackRecipeInput(slots.get(0));
-
-        ItemStack resultStack = recipe.value().craft(input, registryManager);
-        if (resultStack.isEmpty()) {
-            cir.setReturnValue(false);
-            return;
-        }
-
-        ItemStack outputStack = slots.get(2);
-        if (!outputStack.isEmpty()) {
-            if (!ItemStack.areItemsAndComponentsEqual(outputStack, resultStack)) {
-                cir.setReturnValue(false);
-                return;
-            }
-            int maxAllowed = Math.min(count, Math.min(outputStack.getMaxCount(), resultStack.getMaxCount()));
-            if (outputStack.getCount() + resultStack.getCount() > maxAllowed) {
-                cir.setReturnValue(false);
-                return;
-            }
         }
 
         ItemStack inputStack = slots.get(0);
-        if (outputStack.isEmpty()) {
-            slots.set(2, resultStack.copy());
-        } else {
-            outputStack.increment(resultStack.getCount());
+        if (inputStack.isEmpty()) {
+            return;
         }
 
-        if (inputStack.isOf(Items.WET_SPONGE) && !slots.get(1).isEmpty() && slots.get(1).isOf(Items.BUCKET)) {
-            slots.set(1, new ItemStack(Items.WATER_BUCKET));
+        ItemStack result = recipe.value().assemble(new net.minecraft.world.item.crafting.SingleRecipeInput(inputStack), registryManager);
+        if (result.isEmpty()) {
+            return;
         }
 
-        inputStack.decrement(1);
+        ItemStack output = slots.get(2);
+        if (output.isEmpty()) {
+            slots.set(2, result.copy());
+            inputStack.shrink(1);
+            cir.setReturnValue(true);
+            return;
+        }
+
+        if (!ItemStack.isSameItemSameComponents(output, result)) {
+            return;
+        }
+
+        int maxAllowed = Math.min(output.getMaxStackSize(), count);
+        int targetCount = output.getCount() + result.getCount();
+        if (targetCount > maxAllowed) {
+            return;
+        }
+
+        output.grow(result.getCount());
+        inputStack.shrink(1);
         cir.setReturnValue(true);
     }
 
-    @Inject(method = "canAcceptRecipeOutput", at = @At("HEAD"), cancellable = true, require = 0)
-    private static void onCanAcceptRecipeOutputNeoForge(DynamicRegistryManager registryManager, RecipeEntry<? extends AbstractCookingRecipe> recipe, DefaultedList<ItemStack> slots, int count, AbstractFurnaceBlockEntity furnace, CallbackInfoReturnable<Boolean> cir) {
-        onCanAcceptRecipeOutput(registryManager, recipe, slots, count, cir);
+    @Inject(method = "canBurn", at = @At("HEAD"), cancellable = true, require = 0)
+    private static void onCanBurnNeoForge(RegistryAccess registryManager, RecipeHolder<? extends AbstractCookingRecipe> recipe, NonNullList<ItemStack> slots, int count, AbstractFurnaceBlockEntity furnace, CallbackInfoReturnable<Boolean> cir) {
+        onCanBurn(registryManager, recipe, slots, count, cir);
     }
 
-    @Inject(method = "craftRecipe", at = @At("HEAD"), cancellable = true, require = 0)
-    private static void onCraftRecipeNeoForge(DynamicRegistryManager registryManager, RecipeEntry<? extends AbstractCookingRecipe> recipe, DefaultedList<ItemStack> slots, int count, AbstractFurnaceBlockEntity furnace, CallbackInfoReturnable<Boolean> cir) {
-        onCraftRecipe(registryManager, recipe, slots, count, cir);
+    @Inject(method = "burn", at = @At("HEAD"), cancellable = true, require = 0)
+    private static void onBurnNeoForge(RegistryAccess registryManager, RecipeHolder<? extends AbstractCookingRecipe> recipe, NonNullList<ItemStack> slots, int count, AbstractFurnaceBlockEntity furnace, CallbackInfoReturnable<Boolean> cir) {
+        onBurn(registryManager, recipe, slots, count, cir);
     }
 }

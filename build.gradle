@@ -34,11 +34,7 @@ loom {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    if (project.hasProperty('yarn_mappings') && !project.property('yarn_mappings').toString().trim().isEmpty()) {
-        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    } else {
-        mappings files("empty-mappings.jar")
-    }
+    mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     def fabricApi = project.findProperty('fabric_api_version') ?: project.findProperty('fabric_version')
     if (fabricApi) {

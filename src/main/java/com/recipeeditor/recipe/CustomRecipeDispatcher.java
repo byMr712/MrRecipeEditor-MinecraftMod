@@ -668,23 +668,26 @@ public class CustomRecipeDispatcher {
                 return CraftingBookCategory.EQUIPMENT;
             }
         }
-        if (item instanceof net.minecraft.world.item.BlockItem bi) {
-            var block = bi.getBlock();
-            if (block instanceof RedStoneWireBlock ||
-                block instanceof RepeaterBlock ||
-                block instanceof ComparatorBlock ||
-                block instanceof RedstoneTorchBlock ||
-                block instanceof HopperBlock ||
-                block instanceof DropperBlock ||
-                block instanceof DispenserBlock ||
-                block instanceof LeverBlock ||
-                block instanceof ButtonBlock ||
-                block instanceof PressurePlateBlock ||
-                block instanceof ObserverBlock ||
-                block instanceof DaylightDetectorBlock ||
-                block instanceof TripWireHookBlock ||
-                block instanceof TargetBlock ||
-                block instanceof CrafterBlock) {
+        if (item instanceof net.minecraft.world.item.BlockItem blockItem) {
+            net.minecraft.world.level.block.Block block = blockItem.getBlock();
+            if (block instanceof net.minecraft.world.level.block.DiodeBlock ||
+                block instanceof net.minecraft.world.level.block.RedStoneWireBlock ||
+                block instanceof net.minecraft.world.level.block.PoweredBlock ||
+                block == net.minecraft.world.level.block.Blocks.REDSTONE_BLOCK ||
+                block instanceof net.minecraft.world.level.block.RedstoneTorchBlock ||
+                block instanceof net.minecraft.world.level.block.RedstoneLampBlock ||
+                block instanceof net.minecraft.world.level.block.piston.PistonBaseBlock ||
+                block instanceof net.minecraft.world.level.block.HopperBlock ||
+                block instanceof net.minecraft.world.level.block.DropperBlock ||
+                block instanceof net.minecraft.world.level.block.DispenserBlock ||
+                block instanceof net.minecraft.world.level.block.LeverBlock ||
+                block instanceof net.minecraft.world.level.block.ButtonBlock ||
+                block instanceof net.minecraft.world.level.block.BasePressurePlateBlock ||
+                block instanceof net.minecraft.world.level.block.ObserverBlock ||
+                block instanceof net.minecraft.world.level.block.DaylightDetectorBlock ||
+                block instanceof net.minecraft.world.level.block.TripWireHookBlock ||
+                block instanceof net.minecraft.world.level.block.TargetBlock ||
+                block instanceof net.minecraft.world.level.block.CrafterBlock) {
                 return CraftingBookCategory.REDSTONE;
             }
             return CraftingBookCategory.BUILDING;

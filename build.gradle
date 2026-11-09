@@ -46,12 +46,24 @@ dependencies {
         modLocalRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
     }
     if (project.hasProperty('rei_version') && !project.property('rei_version').toString().trim().isEmpty()) {
-        modCompileOnly "me.shedaniel:RoughlyEnoughItems-api-fabric:${project.rei_version}"
-        modCompileOnly "me.shedaniel:RoughlyEnoughItems-default-plugin-fabric:${project.rei_version}"
+        modCompileOnly("me.shedaniel:RoughlyEnoughItems-api-fabric:${project.rei_version}") {
+            exclude group: "net.fabricmc.fabric-api"
+        }
+        modCompileOnly("me.shedaniel:RoughlyEnoughItems-default-plugin-fabric:${project.rei_version}") {
+            exclude group: "net.fabricmc.fabric-api"
+        }
     }
     if (project.hasProperty('architectury_version') && !project.property('architectury_version').toString().trim().isEmpty()) {
-        modCompileOnly "dev.architectury:architectury-fabric:${project.architectury_version}"
+        modCompileOnly("dev.architectury:architectury-fabric:${project.architectury_version}") {
+            exclude group: "net.fabricmc.fabric-api"
+        }
     }
+    testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+    useJUnitPlatform()
 }
 
 processResources {

@@ -264,12 +264,14 @@ public class CustomRecipeData {
                 if (entryList.isPresent() && entryList.get().size() > 0) {
                     return Ingredient.of(tagKey);
                 }
+                List<Item> items = com.recipeeditor.inspector.TagResolver.getAllItemsForTag(slotStr);
+                if (!items.isEmpty()) {
+                    return Ingredient.of(items.toArray(new Item[0]));
+                }
+                return Ingredient.of(tagKey);
             }
-            List<Item> items = com.recipeeditor.inspector.TagResolver.getAllItemsForTag(slotStr);
-            if (!items.isEmpty()) {
-                return Ingredient.of(items.toArray(new Item[0]));
-            }
-            return null;
+            TagKey<Item> emptyKey = TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("minecraft", "unmatchable_empty"));
+            return Ingredient.of(emptyKey);
         }
         Item item = getItemAt(slot);
         if (item != Items.AIR) {
@@ -351,4 +353,5 @@ public class CustomRecipeData {
     public static CustomRecipeData fromJson(String json) {
         return GSON.fromJson(json, CustomRecipeData.class);
     }
+
 }

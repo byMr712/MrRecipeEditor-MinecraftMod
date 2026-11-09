@@ -1,13 +1,13 @@
 package com.recipeeditor.mixin;
 
 import com.recipeeditor.recipe.CustomRecipeDispatcher;
-import net.minecraft.recipe.Recipe;
-import net.minecraft.recipe.RecipeEntry;
-import net.minecraft.recipe.RecipeManager;
-import net.minecraft.recipe.RecipeType;
-import net.minecraft.recipe.input.RecipeInput;
-import net.minecraft.util.Identifier;
-import net.minecraft.world.World;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.item.crafting.RecipeInput;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,105 +21,105 @@ import java.util.Optional;
 @Mixin(value = RecipeManager.class, priority = 500)
 public class RecipeManagerMixin {
 
-    @Inject(method = "getFirstMatch(Lnet/minecraft/recipe/RecipeType;Lnet/minecraft/recipe/input/RecipeInput;Lnet/minecraft/world/World;)Ljava/util/Optional;", at = @At("HEAD"), cancellable = true)
-    private <I extends RecipeInput, T extends Recipe<I>> void onGetFirstMatch(
+    @Inject(method = "getRecipeFor(Lnet/minecraft/world/item/crafting/RecipeType;Lnet/minecraft/world/item/crafting/RecipeInput;Lnet/minecraft/world/level/Level;)Ljava/util/Optional;", at = @At("HEAD"), cancellable = true)
+    private <I extends RecipeInput, T extends Recipe<I>> void onGetRecipeFor(
             RecipeType<T> type,
             I input,
-            World world,
-            CallbackInfoReturnable<Optional<RecipeEntry<T>>> cir
+            Level world,
+            CallbackInfoReturnable<Optional<RecipeHolder<T>>> cir
     ) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        Optional<RecipeEntry<T>> custom = CustomRecipeDispatcher.getCustomMatch(type, input, world);
+        Optional<RecipeHolder<T>> custom = CustomRecipeDispatcher.getCustomMatch(type, input, world);
         if (custom.isPresent()) {
             cir.setReturnValue(custom);
         }
     }
 
-    @Inject(method = "getFirstMatch(Lnet/minecraft/recipe/RecipeType;Lnet/minecraft/recipe/input/RecipeInput;Lnet/minecraft/world/World;)Ljava/util/Optional;", at = @At("RETURN"), cancellable = true)
-    private <I extends RecipeInput, T extends Recipe<I>> void onGetFirstMatchReturn(
+    @Inject(method = "getRecipeFor(Lnet/minecraft/world/item/crafting/RecipeType;Lnet/minecraft/world/item/crafting/RecipeInput;Lnet/minecraft/world/level/Level;)Ljava/util/Optional;", at = @At("RETURN"), cancellable = true)
+    private <I extends RecipeInput, T extends Recipe<I>> void onGetRecipeForReturn(
             RecipeType<T> type,
             I input,
-            World world,
-            CallbackInfoReturnable<Optional<RecipeEntry<T>>> cir
+            Level world,
+            CallbackInfoReturnable<Optional<RecipeHolder<T>>> cir
     ) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        Optional<RecipeEntry<T>> res = cir.getReturnValue();
+        Optional<RecipeHolder<T>> res = cir.getReturnValue();
         if (res != null && res.isPresent() && CustomRecipeDispatcher.isRecipeOverridden(res.get())) {
             cir.setReturnValue(Optional.empty());
         }
     }
 
-    @Inject(method = "getFirstMatch(Lnet/minecraft/recipe/RecipeType;Lnet/minecraft/recipe/input/RecipeInput;Lnet/minecraft/world/World;Lnet/minecraft/recipe/RecipeEntry;)Ljava/util/Optional;", at = @At("HEAD"), cancellable = true)
-    private <I extends RecipeInput, T extends Recipe<I>> void onGetFirstMatchWithLast(
+    @Inject(method = "getRecipeFor(Lnet/minecraft/world/item/crafting/RecipeType;Lnet/minecraft/world/item/crafting/RecipeInput;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/crafting/RecipeHolder;)Ljava/util/Optional;", at = @At("HEAD"), cancellable = true)
+    private <I extends RecipeInput, T extends Recipe<I>> void onGetRecipeForWithLast(
             RecipeType<T> type,
             I input,
-            World world,
-            RecipeEntry<T> last,
-            CallbackInfoReturnable<Optional<RecipeEntry<T>>> cir
+            Level world,
+            RecipeHolder<T> last,
+            CallbackInfoReturnable<Optional<RecipeHolder<T>>> cir
     ) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        Optional<RecipeEntry<T>> custom = CustomRecipeDispatcher.getCustomMatch(type, input, world);
+        Optional<RecipeHolder<T>> custom = CustomRecipeDispatcher.getCustomMatch(type, input, world);
         if (custom.isPresent()) {
             cir.setReturnValue(custom);
         }
     }
 
-    @Inject(method = "getFirstMatch(Lnet/minecraft/recipe/RecipeType;Lnet/minecraft/recipe/input/RecipeInput;Lnet/minecraft/world/World;Lnet/minecraft/recipe/RecipeEntry;)Ljava/util/Optional;", at = @At("RETURN"), cancellable = true)
-    private <I extends RecipeInput, T extends Recipe<I>> void onGetFirstMatchWithLastReturn(
+    @Inject(method = "getRecipeFor(Lnet/minecraft/world/item/crafting/RecipeType;Lnet/minecraft/world/item/crafting/RecipeInput;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/crafting/RecipeHolder;)Ljava/util/Optional;", at = @At("RETURN"), cancellable = true)
+    private <I extends RecipeInput, T extends Recipe<I>> void onGetRecipeForWithLastReturn(
             RecipeType<T> type,
             I input,
-            World world,
-            RecipeEntry<T> last,
-            CallbackInfoReturnable<Optional<RecipeEntry<T>>> cir
+            Level world,
+            RecipeHolder<T> last,
+            CallbackInfoReturnable<Optional<RecipeHolder<T>>> cir
     ) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        Optional<RecipeEntry<T>> res = cir.getReturnValue();
+        Optional<RecipeHolder<T>> res = cir.getReturnValue();
         if (res != null && res.isPresent() && CustomRecipeDispatcher.isRecipeOverridden(res.get())) {
             cir.setReturnValue(Optional.empty());
         }
     }
 
-    @Inject(method = "getFirstMatch(Lnet/minecraft/recipe/RecipeType;Lnet/minecraft/recipe/input/RecipeInput;Lnet/minecraft/world/World;Lnet/minecraft/util/Identifier;)Ljava/util/Optional;", at = @At("HEAD"), cancellable = true)
-    private <I extends RecipeInput, T extends Recipe<I>> void onGetFirstMatchWithId(
+    @Inject(method = "getRecipeFor(Lnet/minecraft/world/item/crafting/RecipeType;Lnet/minecraft/world/item/crafting/RecipeInput;Lnet/minecraft/world/level/Level;Lnet/minecraft/resources/ResourceLocation;)Ljava/util/Optional;", at = @At("HEAD"), cancellable = true)
+    private <I extends RecipeInput, T extends Recipe<I>> void onGetRecipeForWithId(
             RecipeType<T> type,
             I input,
-            World world,
-            Identifier id,
-            CallbackInfoReturnable<Optional<RecipeEntry<T>>> cir
+            Level world,
+            ResourceLocation id,
+            CallbackInfoReturnable<Optional<RecipeHolder<T>>> cir
     ) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        Optional<RecipeEntry<T>> custom = CustomRecipeDispatcher.getCustomMatch(type, input, world);
+        Optional<RecipeHolder<T>> custom = CustomRecipeDispatcher.getCustomMatch(type, input, world);
         if (custom.isPresent()) {
             cir.setReturnValue(custom);
         }
     }
 
-    @Inject(method = "getFirstMatch(Lnet/minecraft/recipe/RecipeType;Lnet/minecraft/recipe/input/RecipeInput;Lnet/minecraft/world/World;Lnet/minecraft/util/Identifier;)Ljava/util/Optional;", at = @At("RETURN"), cancellable = true)
-    private <I extends RecipeInput, T extends Recipe<I>> void onGetFirstMatchWithIdReturn(
+    @Inject(method = "getRecipeFor(Lnet/minecraft/world/item/crafting/RecipeType;Lnet/minecraft/world/item/crafting/RecipeInput;Lnet/minecraft/world/level/Level;Lnet/minecraft/resources/ResourceLocation;)Ljava/util/Optional;", at = @At("RETURN"), cancellable = true)
+    private <I extends RecipeInput, T extends Recipe<I>> void onGetRecipeForWithIdReturn(
             RecipeType<T> type,
             I input,
-            World world,
-            Identifier id,
-            CallbackInfoReturnable<Optional<RecipeEntry<T>>> cir
+            Level world,
+            ResourceLocation id,
+            CallbackInfoReturnable<Optional<RecipeHolder<T>>> cir
     ) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        Optional<RecipeEntry<T>> res = cir.getReturnValue();
+        Optional<RecipeHolder<T>> res = cir.getReturnValue();
         if (res != null && res.isPresent() && CustomRecipeDispatcher.isRecipeOverridden(res.get())) {
             cir.setReturnValue(Optional.empty());
         }
     }
 
     @org.spongepowered.asm.mixin.Unique
-    private Collection<RecipeEntry<?>> recipeeditor$cachedValues = null;
+    private Collection<RecipeHolder<?>> recipeeditor$cachedValues = null;
     @org.spongepowered.asm.mixin.Unique
-    private Collection<RecipeEntry<?>> recipeeditor$lastOriginalValues = null;
+    private Collection<RecipeHolder<?>> recipeeditor$lastOriginalValues = null;
     @org.spongepowered.asm.mixin.Unique
     private int recipeeditor$lastConfigVer = -1;
 
-    @Inject(method = "values", at = @At("RETURN"), cancellable = true)
-    private void onValues(CallbackInfoReturnable<Collection<RecipeEntry<?>>> cir) {
+    @Inject(method = "getRecipes", at = @At("RETURN"), cancellable = true)
+    private void onGetRecipes(CallbackInfoReturnable<Collection<RecipeHolder<?>>> cir) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        Collection<RecipeEntry<?>> original = cir.getReturnValue();
+        Collection<RecipeHolder<?>> original = cir.getReturnValue();
         com.recipeeditor.config.RecipeEditorConfig config = com.recipeeditor.config.RecipeEditorConfig.getInstance();
         int currentVer = config != null ? config.configVersion : 0;
         if (original == recipeeditor$lastOriginalValues && recipeeditor$cachedValues != null && recipeeditor$lastConfigVer == currentVer) {
@@ -127,9 +127,9 @@ public class RecipeManagerMixin {
             return;
         }
 
-        List<RecipeEntry<?>> filtered = new ArrayList<>();
+        List<RecipeHolder<?>> filtered = new ArrayList<>();
         if (original != null) {
-            for (RecipeEntry<?> entry : original) {
+            for (RecipeHolder<?> entry : original) {
                 if (entry.id() != null && "recipeeditor".equals(entry.id().getNamespace())) {
                     continue;
                 }
@@ -145,22 +145,22 @@ public class RecipeManagerMixin {
         cir.setReturnValue(recipeeditor$cachedValues);
     }
 
-    @Inject(method = "getAllMatches", at = @At("RETURN"), cancellable = true)
-    private <I extends RecipeInput, T extends Recipe<I>> void onGetAllMatches(
+    @Inject(method = "getRecipesFor", at = @At("RETURN"), cancellable = true)
+    private <I extends RecipeInput, T extends Recipe<I>> void onGetRecipesFor(
             RecipeType<T> type,
             I input,
-            World world,
-            CallbackInfoReturnable<List<RecipeEntry<T>>> cir
+            Level world,
+            CallbackInfoReturnable<List<RecipeHolder<T>>> cir
     ) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        List<RecipeEntry<T>> original = cir.getReturnValue();
-        List<RecipeEntry<T>> combined = new ArrayList<>();
-        List<RecipeEntry<T>> custom = CustomRecipeDispatcher.getCustomMatches(type, input, world);
+        List<RecipeHolder<T>> original = cir.getReturnValue();
+        List<RecipeHolder<T>> combined = new ArrayList<>();
+        List<RecipeHolder<T>> custom = CustomRecipeDispatcher.getCustomMatches(type, input, world);
         if (custom != null && !custom.isEmpty()) {
             combined.addAll(custom);
         }
         if (original != null) {
-            for (RecipeEntry<T> entry : original) {
+            for (RecipeHolder<T> entry : original) {
                 if (entry.id() != null && "recipeeditor".equals(entry.id().getNamespace())) {
                     continue;
                 }
@@ -172,20 +172,20 @@ public class RecipeManagerMixin {
         cir.setReturnValue(combined);
     }
 
-    @Inject(method = "listAllOfType", at = @At("RETURN"), cancellable = true)
-    private <I extends RecipeInput, T extends Recipe<I>> void onListAllOfType(
+    @Inject(method = "getAllRecipesFor", at = @At("RETURN"), cancellable = true)
+    private <I extends RecipeInput, T extends Recipe<I>> void onGetAllRecipesFor(
             RecipeType<T> type,
-            CallbackInfoReturnable<List<RecipeEntry<T>>> cir
+            CallbackInfoReturnable<List<RecipeHolder<T>>> cir
     ) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        List<RecipeEntry<T>> original = cir.getReturnValue();
-        List<RecipeEntry<T>> combined = new ArrayList<>();
-        List<RecipeEntry<T>> custom = CustomRecipeDispatcher.getAllCustomRecipesOfType(type);
+        List<RecipeHolder<T>> original = cir.getReturnValue();
+        List<RecipeHolder<T>> combined = new ArrayList<>();
+        List<RecipeHolder<T>> custom = CustomRecipeDispatcher.getAllCustomRecipesOfType(type);
         if (custom != null && !custom.isEmpty()) {
             combined.addAll(custom);
         }
         if (original != null) {
-            for (RecipeEntry<T> entry : original) {
+            for (RecipeHolder<T> entry : original) {
                 if (entry.id() != null && "recipeeditor".equals(entry.id().getNamespace())) {
                     continue;
                 }
@@ -197,35 +197,22 @@ public class RecipeManagerMixin {
         cir.setReturnValue(combined);
     }
 
-    @Inject(method = "sortedValues", at = @At("RETURN"), cancellable = true)
-    private void onSortedValues(CallbackInfoReturnable<Collection<RecipeEntry<?>>> cir) {
+    @Inject(method = "getOrderedRecipes", at = @At("RETURN"), cancellable = true)
+    private void onGetOrderedRecipes(CallbackInfoReturnable<Collection<RecipeHolder<?>>> cir) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        cir.setReturnValue(((RecipeManager) (Object) this).values());
+        cir.setReturnValue(((RecipeManager) (Object) this).getRecipes());
     }
 
-    @Inject(method = "get(Lnet/minecraft/util/Identifier;)Ljava/util/Optional;", at = @At("RETURN"), cancellable = true)
-    private void onGet(Identifier id, CallbackInfoReturnable<Optional<RecipeEntry<?>>> cir) {
+    @Inject(method = "byKey", at = @At("RETURN"), cancellable = true)
+    private void onByKey(ResourceLocation id, CallbackInfoReturnable<Optional<RecipeHolder<?>>> cir) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        Optional<RecipeEntry<?>> original = cir.getReturnValue();
+        Optional<RecipeHolder<?>> original = cir.getReturnValue();
         if (original != null && original.isPresent()) {
             return;
         }
-        Optional<RecipeEntry<?>> custom = CustomRecipeDispatcher.getCustomRecipeEntryById(id);
+        Optional<RecipeHolder<?>> custom = CustomRecipeDispatcher.getCustomRecipeEntryById(id);
         if (custom != null && custom.isPresent()) {
             cir.setReturnValue(custom);
-        }
-    }
-
-    @Inject(method = "get(Lnet/minecraft/recipe/RecipeType;Lnet/minecraft/util/Identifier;)Lnet/minecraft/recipe/RecipeEntry;", at = @At("RETURN"), cancellable = true)
-    private void onGetWithType(RecipeType<?> type, Identifier id, CallbackInfoReturnable<RecipeEntry<?>> cir) {
-        if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        RecipeEntry<?> original = cir.getReturnValue();
-        if (original != null) {
-            return;
-        }
-        Optional<RecipeEntry<?>> custom = CustomRecipeDispatcher.getCustomRecipeEntryById(id);
-        if (custom != null && custom.isPresent()) {
-            cir.setReturnValue(custom.get());
         }
     }
 }

@@ -1,15 +1,17 @@
 package com.recipeeditor.config;
 
-import net.minecraft.item.Item;
-import net.minecraft.item.Items;
-import net.minecraft.recipe.Ingredient;
-import net.minecraft.recipe.RawShapedRecipe;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.tag.TagKey;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.NonNullList;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.ShapedRecipePattern;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 public class CustomRecipeData {
     public String id = "";
@@ -27,97 +29,88 @@ public class CustomRecipeData {
     public Map<String, Integer> typeCounts = new HashMap<>();
     public transient String originalKey = null;
 
-    private transient RawShapedRecipe cachedRawRecipe = null;
-    private transient int cachedHash = 0;
+    public transient int patternWidth = 0;
+    public transient int patternHeight = 0;
+    public transient int minRow = 0;
+    public transient int minCol = 0;
+    public transient int maxRow = 0;
+    public transient int maxCol = 0;
+    private transient int patternBoundsHash = 0;
     private transient Ingredient[] cachedIngredients = null;
     private transient int cachedPatternHash = 0;
     private transient List<Ingredient> cachedNonEmptyIngredients = null;
-    private transient int patternBoundsHash = 0;
-    private transient int patternWidth = -1;
-    private transient int patternHeight = -1;
-    private transient int minRow = -1;
-    private transient int minCol = -1;
-    private transient int maxCol = -1;
-
-    public String getKey() {
-        String res = resultItemId != null ? resultItemId : "minecraft:air";
-        String t = type != null ? type.name() : "SHAPED_CRAFTING";
-        return res + "#" + t + (isShapeless ? "#SL#" : "#") + getPatternSignature();
-    }
-
-    public String getPatternSignature() {
-        if (patternSlots == null) return "empty";
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 9; i++) {
-            if (i > 0) sb.append(',');
-            sb.append(patternSlots[i] != null ? patternSlots[i] : "minecraft:air");
-        }
-        return sb.toString();
-    }
-
-    public int getResultCountForType(RecipeTypeEnum t) {
-        if (t == null) t = this.type != null ? this.type : RecipeTypeEnum.SHAPED_CRAFTING;
-        if (typeCounts != null && typeCounts.containsKey(t.name())) {
-            return typeCounts.get(t.name());
-        }
-        return this.resultCount > 0 ? this.resultCount : 1;
-    }
-
-    public void setResultCountForType(RecipeTypeEnum t, int count) {
-        if (t == null) t = this.type != null ? this.type : RecipeTypeEnum.SHAPED_CRAFTING;
-        int clamped = Math.max(1, Math.min(1000, count));
-        if (typeCounts == null) {
-            typeCounts = new HashMap<>();
-        }
-        typeCounts.put(t.name(), clamped);
-        if (this.type == t) {
-            this.resultCount = clamped;
-        }
-    }
+    private transient ShapedRecipePattern cachedRawRecipe = null;
+    private transient int cachedHash = 0;
 
     public CustomRecipeData() {
         Arrays.fill(patternSlots, "minecraft:air");
     }
 
     public CustomRecipeData(String id, String resultItemId, int resultCount, RecipeTypeEnum type) {
+        this();
         this.id = id;
         this.resultItemId = resultItemId;
-        this.resultCount = Math.max(1, Math.min(1000, resultCount));
-        this.type = type != null ? type : RecipeTypeEnum.SHAPED_CRAFTING;
-        this.patternSlots = new String[9];
-        Arrays.fill(this.patternSlots, "minecraft:air");
+        this.resultCount = resultCount;
+        this.type = type;
     }
 
-    public synchronized void invalidateCache() {
-        cachedRawRecipe = null;
-        cachedHash = 0;
+    public int getResultCountForType(RecipeTypeEnum targetType) {
+        if (targetType == null) return this.resultCount;
+        if (typeCounts != null && typeCounts.containsKey(targetType.name())) {
+            Integer count = typeCounts.get(targetType.name());
+            if (count != null && count > 0) return count;
+        }
+        return this.resultCount;
+    }
+
+    public void setResultCountForType(RecipeTypeEnum targetType, int count) {
+        if (targetType == null) return;
+        if (typeCounts == null) typeCounts = new HashMap<>();
+        typeCounts.put(targetType.name(), count);
+        if (this.type == targetType) {
+            this.resultCount = count;
+        }
+    }
+
+    public String getPatternSignature() {
+        if (patternSlots == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < patternSlots.length; i++) {
+            if (i > 0) sb.append(",");
+            sb.append(patternSlots[i]);
+        }
+        return sb.toString();
+    }
+
+    public String getKey() {
+        return resultItemId + "#" + type.name() + (isShapeless ? "#SL#" : "#") + getPatternSignature();
+    }
+
+    public void invalidateCache() {
+        patternBoundsHash = 0;
         cachedIngredients = null;
         cachedPatternHash = 0;
         cachedNonEmptyIngredients = null;
-        patternBoundsHash = 0;
-        patternWidth = -1;
-        patternHeight = -1;
-        minRow = -1;
-        minCol = -1;
-        maxCol = -1;
+        cachedRawRecipe = null;
+        cachedHash = 0;
     }
 
     public Item getResultItem() {
-        if (resultItemId == null || resultItemId.isEmpty()) {
+        if (resultItemId == null || resultItemId.isEmpty() || resultItemId.equals("minecraft:air")) {
             return Items.AIR;
         }
-        Identifier id = Identifier.tryParse(resultItemId);
-        if (id == null || !Registries.ITEM.containsId(id)) {
+        ResourceLocation id = ResourceLocation.tryParse(resultItemId);
+        if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
             return Items.AIR;
         }
-        return Registries.ITEM.get(id);
+        return BuiltInRegistries.ITEM.get(id);
     }
 
     public void setResultItem(Item item) {
         if (item == null || item == Items.AIR) {
             this.resultItemId = "minecraft:air";
         } else {
-            Identifier id = Registries.ITEM.getId(item);
+            ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
             this.resultItemId = id != null ? id.toString() : "minecraft:air";
         }
     }
@@ -133,11 +126,11 @@ public class CustomRecipeData {
         if (idStr.startsWith("#")) {
             return com.recipeeditor.inspector.TagResolver.resolveTag(idStr);
         }
-        Identifier id = Identifier.tryParse(idStr);
-        if (id == null || !Registries.ITEM.containsId(id)) {
+        ResourceLocation id = ResourceLocation.tryParse(idStr);
+        if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
             return Items.AIR;
         }
-        return Registries.ITEM.get(id);
+        return BuiltInRegistries.ITEM.get(id);
     }
 
     public String getSlotString(int slot) {
@@ -147,35 +140,32 @@ public class CustomRecipeData {
         return patternSlots[slot] != null ? patternSlots[slot] : "minecraft:air";
     }
 
+    public void setSlotString(int slot, String str) {
+        if (slot >= 0 && slot < 9 && patternSlots != null && slot < patternSlots.length) {
+            String val = (str == null || str.isEmpty()) ? "minecraft:air" : str;
+            if (!val.equals(patternSlots[slot])) {
+                patternSlots[slot] = val;
+                invalidateCache();
+            }
+        }
+    }
+
     public void setItemAt(int slot, Item item) {
-        if (slot >= 0 && slot < 9) {
-            if (patternSlots == null || patternSlots.length != 9) {
-                patternSlots = new String[9];
-                Arrays.fill(patternSlots, "minecraft:air");
-            }
-            if (item == null || item == Items.AIR) {
-                patternSlots[slot] = "minecraft:air";
-            } else {
-                Identifier id = Registries.ITEM.getId(item);
-                patternSlots[slot] = id != null ? id.toString() : "minecraft:air";
-            }
-            invalidateCache();
+        if (slot < 0 || slot >= 9 || patternSlots == null || slot >= patternSlots.length) {
+            return;
+        }
+        if (item == null || item == Items.AIR) {
+            setSlotString(slot, "minecraft:air");
+        } else {
+            ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
+            setSlotString(slot, id != null ? id.toString() : "minecraft:air");
         }
     }
 
-    public void setSlotString(int slot, String val) {
-        if (slot >= 0 && slot < 9) {
-            if (patternSlots == null || patternSlots.length != 9) {
-                patternSlots = new String[9];
-                Arrays.fill(patternSlots, "minecraft:air");
-            }
-            patternSlots[slot] = val != null ? val : "minecraft:air";
-            invalidateCache();
+    public Ingredient getIngredientAt(int slot) {
+        if (slot < 0 || slot >= 9 || patternSlots == null || slot >= patternSlots.length) {
+            return null;
         }
-    }
-
-    public synchronized Ingredient getIngredientAt(int slot) {
-        if (slot < 0 || slot >= 9) return null;
         int currentHash = Arrays.hashCode(patternSlots);
         if (cachedIngredients == null || cachedPatternHash != currentHash) {
             Ingredient[] temp = new Ingredient[9];
@@ -185,7 +175,6 @@ public class CustomRecipeData {
             cachedIngredients = temp;
             cachedPatternHash = currentHash;
         } else if (cachedIngredients[slot] != null && cachedIngredients[slot].isEmpty()) {
-            // If previously resolved to empty for a tag before registry was ready, retry now
             String slotStr = getSlotString(slot);
             if (slotStr != null && slotStr.startsWith("#")) {
                 Ingredient retry = computeIngredientForSlot(slot);
@@ -205,8 +194,8 @@ public class CustomRecipeData {
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
                 int slot = r * 3 + c;
-                String s = patternSlots != null ? patternSlots[slot] : null;
-                if (s != null && !s.isEmpty() && !s.equals("minecraft:air")) {
+                String slotStr = getSlotString(slot);
+                if (!slotStr.isEmpty() && !slotStr.equals("minecraft:air")) {
                     if (r < rMin) rMin = r;
                     if (r > rMax) rMax = r;
                     if (c < cMin) cMin = c;
@@ -214,64 +203,79 @@ public class CustomRecipeData {
                 }
             }
         }
-        minRow = rMin;
-        maxCol = cMax;
-        minCol = cMin;
         if (rMax == -1) {
+            minRow = 0;
+            minCol = 0;
+            maxRow = 0;
+            maxCol = 0;
             patternWidth = 0;
             patternHeight = 0;
         } else {
+            minRow = rMin;
+            minCol = cMin;
+            maxRow = rMax;
+            maxCol = cMax;
             patternWidth = cMax - cMin + 1;
             patternHeight = rMax - rMin + 1;
         }
         patternBoundsHash = currentHash;
     }
 
-    public synchronized int getPatternWidth() {
-        if (minRow == -1 || patternBoundsHash != Arrays.hashCode(patternSlots)) computePatternBounds();
+    public int getPatternWidth() {
+        computePatternBounds();
         return patternWidth;
     }
 
-    public synchronized int getPatternHeight() {
-        if (minRow == -1 || patternBoundsHash != Arrays.hashCode(patternSlots)) computePatternBounds();
+    public int getPatternHeight() {
+        computePatternBounds();
         return patternHeight;
     }
 
-    public synchronized int getMinRow() {
-        if (minRow == -1 || patternBoundsHash != Arrays.hashCode(patternSlots)) computePatternBounds();
+    public int getMinRow() {
+        computePatternBounds();
         return minRow;
     }
 
-    public synchronized int getMinCol() {
-        if (minRow == -1 || patternBoundsHash != Arrays.hashCode(patternSlots)) computePatternBounds();
+    public int getMinCol() {
+        computePatternBounds();
         return minCol;
     }
 
-    public synchronized int getMaxCol() {
-        if (minRow == -1 || patternBoundsHash != Arrays.hashCode(patternSlots)) computePatternBounds();
+    public int getMaxRow() {
+        computePatternBounds();
+        return maxRow;
+    }
+
+    public int getMaxCol() {
+        computePatternBounds();
         return maxCol;
     }
 
     public Ingredient computeIngredientForSlot(int slot) {
         String slotStr = getSlotString(slot);
-        if (slotStr.equals("minecraft:air") || slotStr.isEmpty()) {
+        if (slotStr.isEmpty() || slotStr.equals("minecraft:air")) {
             return null;
         }
         if (slotStr.startsWith("#")) {
-            Identifier tagId = Identifier.tryParse(slotStr.substring(1));
+            ResourceLocation tagId = ResourceLocation.tryParse(slotStr.substring(1));
             if (tagId != null) {
-                TagKey<Item> tagKey = TagKey.of(RegistryKeys.ITEM, tagId);
-                return Ingredient.fromTag(tagKey);
+                TagKey<Item> tagKey = TagKey.create(Registries.ITEM, tagId);
+                var entryList = BuiltInRegistries.ITEM.getTag(tagKey);
+                if (entryList.isPresent() && entryList.get().size() > 0) {
+                    return Ingredient.of(tagKey);
+                }
             }
-            // Tag is missing/unresolved: return an unmatchable empty ingredient instead of null (air)
-            return Ingredient.ofItems();
+            List<Item> items = com.recipeeditor.inspector.TagResolver.getAllItemsForTag(slotStr);
+            if (!items.isEmpty()) {
+                return Ingredient.of(items.toArray(new Item[0]));
+            }
+            return null;
         }
         Item item = getItemAt(slot);
         if (item != Items.AIR) {
-            return Ingredient.ofItems(item);
+            return Ingredient.of(item);
         }
-        // Unknown item identifier: return an unmatchable empty ingredient instead of null (air)
-        return Ingredient.ofItems();
+        return null;
     }
 
     public Optional<Ingredient> createIngredientForSlot(int slot) {
@@ -279,16 +283,14 @@ public class CustomRecipeData {
         return ing != null ? Optional.of(ing) : Optional.empty();
     }
 
-    public synchronized RawShapedRecipe getRawRecipe() {
+    public synchronized ShapedRecipePattern getRawRecipe() {
         int hash = Arrays.hashCode(patternSlots);
         if (cachedRawRecipe == null || cachedHash != hash) {
             computePatternBounds();
             if (patternWidth == 0 || patternHeight == 0) {
-                // Completely empty
-                cachedRawRecipe = new RawShapedRecipe(1, 1, net.minecraft.util.collection.DefaultedList.copyOf(Ingredient.EMPTY, Ingredient.EMPTY), Optional.empty());
+                cachedRawRecipe = new ShapedRecipePattern(1, 1, NonNullList.of(Ingredient.EMPTY, Ingredient.EMPTY), Optional.empty());
             } else {
-                int maxRow = minRow + patternHeight - 1;
-                net.minecraft.util.collection.DefaultedList<Ingredient> ingredients = net.minecraft.util.collection.DefaultedList.ofSize(patternWidth * patternHeight, Ingredient.EMPTY);
+                NonNullList<Ingredient> ingredients = NonNullList.withSize(patternWidth * patternHeight, Ingredient.EMPTY);
                 int idx = 0;
                 for (int r = minRow; r <= maxRow; r++) {
                     for (int c = minCol; c <= maxCol; c++) {
@@ -296,7 +298,7 @@ public class CustomRecipeData {
                         ingredients.set(idx++, ing != null ? ing : Ingredient.EMPTY);
                     }
                 }
-                cachedRawRecipe = new RawShapedRecipe(patternWidth, patternHeight, ingredients, Optional.empty());
+                cachedRawRecipe = new ShapedRecipePattern(patternWidth, patternHeight, ingredients, Optional.empty());
             }
             cachedHash = hash;
         }
@@ -309,7 +311,9 @@ public class CustomRecipeData {
         copy.resultItemId = this.resultItemId;
         copy.resultCount = this.resultCount;
         copy.type = this.type;
-        copy.patternSlots = patternSlots != null ? Arrays.copyOf(this.patternSlots, 9) : new String[9];
+        if (this.patternSlots != null) {
+            copy.patternSlots = Arrays.copyOf(this.patternSlots, this.patternSlots.length);
+        }
         copy.experience = this.experience;
         copy.cookingTime = this.cookingTime;
         copy.enabled = this.enabled;
@@ -345,38 +349,6 @@ public class CustomRecipeData {
     }
 
     public static CustomRecipeData fromJson(String json) {
-        if (json == null || json.isEmpty() || !json.trim().startsWith("{")) return null;
-        try {
-            return GSON.fromJson(json, CustomRecipeData.class);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        CustomRecipeData that = (CustomRecipeData) o;
-        return enabled == that.enabled &&
-                resultCount == that.resultCount &&
-                isShapeless == that.isShapeless &&
-                overrideExisting == that.overrideExisting &&
-                Float.compare(that.experience, experience) == 0 &&
-                cookingTime == that.cookingTime &&
-                Objects.equals(id, that.id) &&
-                Objects.equals(resultItemId, that.resultItemId) &&
-                Objects.equals(overriddenId, that.overriddenId) &&
-                Objects.equals(overriddenKey, that.overriddenKey) &&
-                type == that.type &&
-                Arrays.equals(patternSlots, that.patternSlots) &&
-                Objects.equals(typeCounts, that.typeCounts);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = Objects.hash(id, resultItemId, resultCount, type, experience, cookingTime, enabled, overrideExisting, overriddenId, overriddenKey, isShapeless, typeCounts);
-        result = 31 * result + Arrays.hashCode(patternSlots);
-        return result;
+        return GSON.fromJson(json, CustomRecipeData.class);
     }
 }

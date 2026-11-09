@@ -3,21 +3,20 @@ package com.recipeeditor.recipe;
 import com.recipeeditor.config.CustomRecipeData;
 import com.recipeeditor.config.RecipeEditorConfig;
 import com.recipeeditor.config.RecipeTypeEnum;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.network.packet.s2c.play.SynchronizeRecipesS2CPacket;
-import net.minecraft.recipe.*;
-import net.minecraft.recipe.book.CookingRecipeCategory;
-import net.minecraft.recipe.book.CraftingRecipeCategory;
-import net.minecraft.recipe.input.CraftingRecipeInput;
-import net.minecraft.recipe.input.RecipeInput;
-import net.minecraft.recipe.input.SingleStackRecipeInput;
-import net.minecraft.recipe.input.SmithingRecipeInput;
+import net.minecraft.core.NonNullList;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ClientboundRecipePacket;
+import net.minecraft.network.protocol.game.ClientboundUpdateRecipesPacket;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Identifier;
-import net.minecraft.world.World;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.*;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.*;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -32,7 +31,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public class CustomRecipeDispatcher {
     private static volatile Set<String> cachedOverriddenIds = null;
-    private static volatile Set<Identifier> cachedOverriddenIdentifiers = null;
+    private static volatile Set<ResourceLocation> cachedOverriddenIdentifiers = null;
     private static volatile int lastConfigVersion = -1;
 
     public static synchronized void invalidateRecipeBookCache() {
@@ -50,7 +49,7 @@ public class CustomRecipeDispatcher {
 
     private static synchronized void updateOverriddenCaches(RecipeEditorConfig config) {
         Set<String> ids = new HashSet<>();
-        Set<Identifier> identifiers = new HashSet<>();
+        Set<ResourceLocation> identifiers = new HashSet<>();
         if (config != null && config.recipes != null) {
             for (CustomRecipeData recipeData : config.recipes.values()) {
                 if (!recipeData.enabled || !recipeData.overrideExisting) continue;
@@ -64,29 +63,29 @@ public class CustomRecipeDispatcher {
         cachedOverriddenIdentifiers = identifiers;
     }
 
-    private static void addIdVariants(Set<String> ids, Set<Identifier> identifiers, String id) {
+    private static void addIdVariants(Set<String> ids, Set<ResourceLocation> identifiers, String id) {
         if (id == null || id.isEmpty()) return;
         ids.add(id);
-        Identifier parsed = Identifier.tryParse(id);
+        ResourceLocation parsed = ResourceLocation.tryParse(id);
         if (parsed != null) {
             identifiers.add(parsed);
         }
         if (id.startsWith("minecraft:")) {
             String path = id.substring("minecraft:".length());
             ids.add(path);
-            Identifier parsedPath = Identifier.tryParse("minecraft:" + path);
+            ResourceLocation parsedPath = ResourceLocation.tryParse("minecraft:" + path);
             if (parsedPath != null) identifiers.add(parsedPath);
         } else if (!id.contains(":")) {
             ids.add("minecraft:" + id);
-            Identifier parsedMc = Identifier.tryParse("minecraft:" + id);
+            ResourceLocation parsedMc = ResourceLocation.tryParse("minecraft:" + id);
             if (parsedMc != null) identifiers.add(parsedMc);
         }
     }
 
-    public static boolean isRecipeOverridden(RecipeEntry<?> entry) {
+    public static boolean isRecipeOverridden(RecipeHolder<?> entry) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return false;
         if (entry == null || entry.id() == null) return false;
-        Identifier entryId = entry.id();
+        ResourceLocation entryId = entry.id();
         if ("recipeeditor".equals(entryId.getNamespace())) return false;
 
         RecipeEditorConfig config = RecipeEditorConfig.getInstance();
@@ -115,7 +114,7 @@ public class CustomRecipeDispatcher {
         return false;
     }
 
-    public static boolean isIdentifierOverridden(Identifier entryId) {
+    public static boolean isIdentifierOverridden(ResourceLocation entryId) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return false;
         if (entryId == null || "recipeeditor".equals(entryId.getNamespace())) return false;
 
@@ -167,7 +166,7 @@ public class CustomRecipeDispatcher {
         return cachedOverriddenIds.contains(id);
     }
 
-    public static Identifier getRecipeIdentifier(CustomRecipeData data) {
+    public static ResourceLocation getRecipeIdentifier(CustomRecipeData data) {
         String baseId = data.id != null && !data.id.isEmpty() ? data.id : (data.resultItemId != null ? data.resultItemId : "custom");
         if (baseId.contains(":")) {
             baseId = baseId.substring(baseId.indexOf(':') + 1);
@@ -178,11 +177,11 @@ public class CustomRecipeDispatcher {
         }
         String typeSuffix = data.type != null ? data.type.name().toLowerCase(java.util.Locale.ROOT) : "craft";
         int hash = Math.abs(data.getKey().hashCode());
-        return Identifier.of("recipeeditor", cleanId + "_" + typeSuffix + "_" + Integer.toHexString(hash));
+        return ResourceLocation.fromNamespaceAndPath("recipeeditor", cleanId + "_" + typeSuffix + "_" + Integer.toHexString(hash));
     }
 
     @SuppressWarnings("unchecked")
-    public static <I extends RecipeInput, T extends Recipe<I>> Optional<RecipeEntry<T>> getCustomMatch(RecipeType<T> type, I input, World world) {
+    public static <I extends RecipeInput, T extends Recipe<I>> Optional<RecipeHolder<T>> getCustomMatch(RecipeType<T> type, I input, Level world) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return Optional.empty();
         RecipeEditorConfig config = RecipeEditorConfig.getInstance();
         if (config == null || !config.modEnabled || config.recipes == null || config.recipes.isEmpty() || input == null || input.isEmpty()) {
@@ -192,12 +191,12 @@ public class CustomRecipeDispatcher {
         RecipeTypeEnum targetEnum = getEnumForType(type);
         if (targetEnum == null) return Optional.empty();
 
-        if (targetEnum == RecipeTypeEnum.SHAPED_CRAFTING && input instanceof CraftingRecipeInput craftingInput) {
+        if (targetEnum == RecipeTypeEnum.SHAPED_CRAFTING && input instanceof CraftingInput) {
             List<CustomRecipeData> sorted = config.getSortedCraftingRecipes();
             for (CustomRecipeData recipeData : sorted) {
                 if (!recipeData.enabled || recipeData.type != targetEnum) continue;
                 if (matchesInput(recipeData, targetEnum, input)) {
-                    RecipeEntry<T> entry = getCachedSyntheticEntry(recipeData, targetEnum, type);
+                    RecipeHolder<T> entry = getCachedSyntheticEntry(recipeData, targetEnum, type);
                     if (entry != null) {
                         return Optional.of(entry);
                     }
@@ -210,7 +209,7 @@ public class CustomRecipeDispatcher {
             if (!recipeData.enabled || recipeData.type != targetEnum) continue;
 
             if (matchesInput(recipeData, targetEnum, input)) {
-                RecipeEntry<T> entry = getCachedSyntheticEntry(recipeData, targetEnum, type);
+                RecipeHolder<T> entry = getCachedSyntheticEntry(recipeData, targetEnum, type);
                 if (entry != null) {
                     return Optional.of(entry);
                 }
@@ -220,7 +219,7 @@ public class CustomRecipeDispatcher {
     }
 
     @SuppressWarnings("unchecked")
-    public static <I extends RecipeInput, T extends Recipe<I>> List<RecipeEntry<T>> getCustomMatches(RecipeType<T> type, I input, World world) {
+    public static <I extends RecipeInput, T extends Recipe<I>> List<RecipeHolder<T>> getCustomMatches(RecipeType<T> type, I input, Level world) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return Collections.emptyList();
         RecipeEditorConfig config = RecipeEditorConfig.getInstance();
         if (config == null || !config.modEnabled || config.recipes == null || config.recipes.isEmpty() || input == null || input.isEmpty()) {
@@ -230,13 +229,13 @@ public class CustomRecipeDispatcher {
         RecipeTypeEnum targetEnum = getEnumForType(type);
         if (targetEnum == null) return Collections.emptyList();
 
-        List<RecipeEntry<T>> matches = new ArrayList<>();
-        if (targetEnum == RecipeTypeEnum.SHAPED_CRAFTING && input instanceof CraftingRecipeInput craftingInput) {
+        List<RecipeHolder<T>> matches = new ArrayList<>();
+        if (targetEnum == RecipeTypeEnum.SHAPED_CRAFTING && input instanceof CraftingInput) {
             List<CustomRecipeData> sorted = config.getSortedCraftingRecipes();
             for (CustomRecipeData recipeData : sorted) {
                 if (!recipeData.enabled || recipeData.type != targetEnum) continue;
                 if (matchesInput(recipeData, targetEnum, input)) {
-                    RecipeEntry<T> entry = getCachedSyntheticEntry(recipeData, targetEnum, type);
+                    RecipeHolder<T> entry = getCachedSyntheticEntry(recipeData, targetEnum, type);
                     if (entry != null) {
                         matches.add(entry);
                     }
@@ -249,7 +248,7 @@ public class CustomRecipeDispatcher {
             if (!recipeData.enabled || recipeData.type != targetEnum) continue;
 
             if (matchesInput(recipeData, targetEnum, input)) {
-                RecipeEntry<T> entry = getCachedSyntheticEntry(recipeData, targetEnum, type);
+                RecipeHolder<T> entry = getCachedSyntheticEntry(recipeData, targetEnum, type);
                 if (entry != null) {
                     matches.add(entry);
                 }
@@ -259,7 +258,7 @@ public class CustomRecipeDispatcher {
     }
 
     @SuppressWarnings("unchecked")
-    public static <I extends RecipeInput, T extends Recipe<I>> List<RecipeEntry<T>> getAllCustomRecipesOfType(RecipeType<T> type) {
+    public static <I extends RecipeInput, T extends Recipe<I>> List<RecipeHolder<T>> getAllCustomRecipesOfType(RecipeType<T> type) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return Collections.emptyList();
         RecipeEditorConfig config = RecipeEditorConfig.getInstance();
         if (config == null || !config.modEnabled || config.recipes == null || config.recipes.isEmpty()) {
@@ -269,10 +268,10 @@ public class CustomRecipeDispatcher {
         RecipeTypeEnum targetEnum = getEnumForType(type);
         if (targetEnum == null) return Collections.emptyList();
 
-        List<RecipeEntry<T>> list = new ArrayList<>();
+        List<RecipeHolder<T>> list = new ArrayList<>();
         for (CustomRecipeData recipeData : config.recipes.values()) {
             if (!recipeData.enabled || recipeData.type != targetEnum) continue;
-            RecipeEntry<T> entry = getCachedSyntheticEntry(recipeData, targetEnum, type);
+            RecipeHolder<T> entry = getCachedSyntheticEntry(recipeData, targetEnum, type);
             if (entry != null) {
                 list.add(entry);
             }
@@ -280,11 +279,11 @@ public class CustomRecipeDispatcher {
         return list;
     }
 
-    private static final Map<String, RecipeEntry<?>> SYNTHETIC_CACHE = new ConcurrentHashMap<>();
-    private static volatile List<RecipeEntry<?>> CACHED_ALL_CUSTOM_RECIPES = null;
-    private static volatile Set<Identifier> ACTIVE_CUSTOM_RECIPE_IDS = Collections.emptySet();
-    private static final Map<Identifier, RecipeEntry<?>> RECORDED_CUSTOM_ENTRIES = new ConcurrentHashMap<>();
-    private static final Map<Identifier, RecipeEntry<?>> RECENTLY_REMOVED_RECIPES = new ConcurrentHashMap<>();
+    private static final Map<String, RecipeHolder<?>> SYNTHETIC_CACHE = new ConcurrentHashMap<>();
+    private static volatile List<RecipeHolder<?>> CACHED_ALL_CUSTOM_RECIPES = null;
+    private static volatile Set<ResourceLocation> ACTIVE_CUSTOM_RECIPE_IDS = Collections.emptySet();
+    private static final Map<ResourceLocation, RecipeHolder<?>> RECORDED_CUSTOM_ENTRIES = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, RecipeHolder<?>> RECENTLY_REMOVED_RECIPES = new ConcurrentHashMap<>();
     private static volatile int lastCustomRecipesVersion = -1;
 
     private static volatile int cachedSmithingVersion = -1;
@@ -362,19 +361,19 @@ public class CustomRecipeDispatcher {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public static <T extends Recipe<?>> RecipeEntry<T> getCachedSyntheticEntry(CustomRecipeData recipeData, RecipeTypeEnum targetEnum, RecipeType<?> type) {
+    public static <T extends Recipe<?>> RecipeHolder<T> getCachedSyntheticEntry(CustomRecipeData recipeData, RecipeTypeEnum targetEnum, RecipeType<?> type) {
         String cacheKey = recipeData.getKey() + "#" + recipeData.hashCode() + "#" + targetEnum.name();
-        return (RecipeEntry<T>) SYNTHETIC_CACHE.computeIfAbsent(cacheKey, k -> {
+        return (RecipeHolder<T>) SYNTHETIC_CACHE.computeIfAbsent(cacheKey, k -> {
             Recipe<?> dynamicRecipe = createSyntheticRecipe(recipeData, targetEnum, (RecipeType) type);
             if (dynamicRecipe != null) {
-                Identifier id = getRecipeIdentifier(recipeData);
-                return new RecipeEntry(id, dynamicRecipe);
+                ResourceLocation id = getRecipeIdentifier(recipeData);
+                return new RecipeHolder(id, dynamicRecipe);
             }
             return null;
         });
     }
 
-    public static Collection<RecipeEntry<?>> getAllCustomRecipes() {
+    public static Collection<RecipeHolder<?>> getAllCustomRecipes() {
         RecipeEditorConfig config = RecipeEditorConfig.getInstance();
         if (config == null || !config.modEnabled || config.recipes == null || config.recipes.isEmpty()) {
             ACTIVE_CUSTOM_RECIPE_IDS = Collections.emptySet();
@@ -386,13 +385,13 @@ public class CustomRecipeDispatcher {
             return CACHED_ALL_CUSTOM_RECIPES;
         }
 
-        List<RecipeEntry<?>> list = new ArrayList<>();
-        Set<Identifier> activeIds = new HashSet<>();
+        List<RecipeHolder<?>> list = new ArrayList<>();
+        Set<ResourceLocation> activeIds = new HashSet<>();
         for (CustomRecipeData recipeData : config.recipes.values()) {
             if (!recipeData.enabled) continue;
             RecipeType<?> mcType = recipeData.type.toRecipeType();
             if (mcType != null) {
-                RecipeEntry<?> entry = getCachedSyntheticEntry(recipeData, recipeData.type, mcType);
+                RecipeHolder<?> entry = getCachedSyntheticEntry(recipeData, recipeData.type, mcType);
                 if (entry != null) {
                     list.add(entry);
                     activeIds.add(entry.id());
@@ -406,7 +405,7 @@ public class CustomRecipeDispatcher {
         return CACHED_ALL_CUSTOM_RECIPES;
     }
 
-    public static boolean isCustomRecipeActive(Identifier id) {
+    public static boolean isCustomRecipeActive(ResourceLocation id) {
         if (id == null || !"recipeeditor".equals(id.getNamespace())) return false;
         RecipeEditorConfig config = RecipeEditorConfig.getInstance();
         if (config == null || !config.modEnabled || config.recipes == null || config.recipes.isEmpty()) {
@@ -417,7 +416,7 @@ public class CustomRecipeDispatcher {
             return true;
         }
         String path = id.getPath();
-        for (Identifier activeId : ACTIVE_CUSTOM_RECIPE_IDS) {
+        for (ResourceLocation activeId : ACTIVE_CUSTOM_RECIPE_IDS) {
             if (activeId.getPath().equals(path)) {
                 return true;
             }
@@ -425,7 +424,7 @@ public class CustomRecipeDispatcher {
         return false;
     }
 
-    public static Optional<RecipeEntry<?>> getCustomRecipeForOverridden(Identifier id) {
+    public static Optional<RecipeHolder<?>> getCustomRecipeForOverridden(ResourceLocation id) {
         if (id == null) return Optional.empty();
         RecipeEditorConfig config = RecipeEditorConfig.getInstance();
         if (config == null || !config.modEnabled || config.recipes == null || config.recipes.isEmpty()) {
@@ -440,7 +439,7 @@ public class CustomRecipeDispatcher {
                 fullId.equals(r.resultItemId) || path.equals(r.resultItemId)) {
                 RecipeType<?> mcType = r.type != null ? r.type.toRecipeType() : null;
                 if (mcType != null) {
-                    RecipeEntry<?> entry = getCachedSyntheticEntry(r, r.type, mcType);
+                    RecipeHolder<?> entry = getCachedSyntheticEntry(r, r.type, mcType);
                     if (entry != null) return Optional.of(entry);
                 }
             }
@@ -448,16 +447,16 @@ public class CustomRecipeDispatcher {
         return Optional.empty();
     }
 
-    public static Optional<RecipeEntry<?>> getCustomRecipeEntryById(Identifier id) {
+    public static Optional<RecipeHolder<?>> getCustomRecipeEntryById(ResourceLocation id) {
         if (id == null) return Optional.empty();
-        Collection<RecipeEntry<?>> all = getAllCustomRecipes();
-        for (RecipeEntry<?> entry : all) {
+        Collection<RecipeHolder<?>> all = getAllCustomRecipes();
+        for (RecipeHolder<?> entry : all) {
             if (id.equals(entry.id())) {
                 return Optional.of(entry);
             }
         }
         String path = id.getPath();
-        for (RecipeEntry<?> entry : all) {
+        for (RecipeHolder<?> entry : all) {
             if (entry.id().getPath().equals(path)) {
                 return Optional.of(entry);
             }
@@ -491,14 +490,14 @@ public class CustomRecipeDispatcher {
                 if (match) {
                     RecipeType<?> mcType = data.type != null ? data.type.toRecipeType() : null;
                     if (mcType != null) {
-                        RecipeEntry<?> entry = getCachedSyntheticEntry(data, data.type, mcType);
+                        RecipeHolder<?> entry = getCachedSyntheticEntry(data, data.type, mcType);
                         if (entry != null) return Optional.of(entry);
                     }
                 }
             }
         }
 
-        for (RecipeEntry<?> entry : all) {
+        for (RecipeHolder<?> entry : all) {
             String entryPath = entry.id().getPath();
             if (entryPath.startsWith(path + "_") || path.startsWith(entryPath + "_") ||
                 entryPath.contains(path) || path.contains(entryPath)) {
@@ -508,11 +507,11 @@ public class CustomRecipeDispatcher {
         return getCustomRecipeForOverridden(id);
     }
 
-    public static Set<Identifier> getRecentlyRemovedIds() {
+    public static Set<ResourceLocation> getRecentlyRemovedIds() {
         return Collections.unmodifiableSet(RECENTLY_REMOVED_RECIPES.keySet());
     }
 
-    public static RecipeEntry<?> getRecentlyRemovedEntry(Identifier id) {
+    public static RecipeHolder<?> getRecentlyRemovedEntry(ResourceLocation id) {
         return RECENTLY_REMOVED_RECIPES.get(id);
     }
 
@@ -522,7 +521,7 @@ public class CustomRecipeDispatcher {
 
     private static boolean matchesInput(CustomRecipeData recipeData, RecipeTypeEnum targetEnum, RecipeInput input) {
         if (targetEnum == RecipeTypeEnum.SHAPED_CRAFTING) {
-            if (input instanceof CraftingRecipeInput craftingInput) {
+            if (input instanceof CraftingInput craftingInput) {
                 return matchesCrafting(recipeData, craftingInput);
             }
             return false;
@@ -535,7 +534,7 @@ public class CustomRecipeDispatcher {
             return false;
         }
 
-        if (input instanceof SingleStackRecipeInput singleInput) {
+        if (input instanceof SingleRecipeInput singleInput) {
             ItemStack stack = singleInput.item();
             if (stack.isEmpty()) return false;
             Ingredient expected = recipeData.getIngredientAt(0);
@@ -545,7 +544,7 @@ public class CustomRecipeDispatcher {
         return false;
     }
 
-    private static boolean matchesCrafting(CustomRecipeData recipeData, CraftingRecipeInput input) {
+    private static boolean matchesCrafting(CustomRecipeData recipeData, CraftingInput input) {
         if (recipeData.isShapeless) {
             return matchesShapeless(recipeData, input);
         } else {
@@ -553,11 +552,11 @@ public class CustomRecipeDispatcher {
         }
     }
 
-    private static boolean matchesShaped(CustomRecipeData recipeData, CraftingRecipeInput input) {
+    private static boolean matchesShaped(CustomRecipeData recipeData, CraftingInput input) {
         int patternW = recipeData.getPatternWidth();
         int patternH = recipeData.getPatternHeight();
-        int inputW = input.getWidth();
-        int inputH = input.getHeight();
+        int inputW = input.width();
+        int inputH = input.height();
 
         if (inputW < patternW || inputH < patternH) return false;
 
@@ -579,18 +578,18 @@ public class CustomRecipeDispatcher {
 
     private static boolean checkMatchAt(
             CustomRecipeData recipeData,
-            CraftingRecipeInput input,
+            CraftingInput input,
             int dx, int dy,
             int minRow, int minCol,
             int patternW, int patternH,
             boolean mirrored
     ) {
-        int inputW = input.getWidth();
-        int inputH = input.getHeight();
+        int inputW = input.width();
+        int inputH = input.height();
 
         for (int y = 0; y < inputH; y++) {
             for (int x = 0; x < inputW; x++) {
-                ItemStack actual = input.getStackInSlot(x + y * inputW);
+                ItemStack actual = input.getItem(x + y * inputW);
 
                 boolean inPatternX = (x >= dx && x < dx + patternW);
                 boolean inPatternY = (y >= dy && y < dy + patternH);
@@ -617,13 +616,13 @@ public class CustomRecipeDispatcher {
         return true;
     }
 
-    private static boolean matchesShapeless(CustomRecipeData recipeData, CraftingRecipeInput input) {
+    private static boolean matchesShapeless(CustomRecipeData recipeData, CraftingInput input) {
         List<Ingredient> ingredients = recipeData.getNonEmptyIngredients();
-        if (input.getStackCount() != ingredients.size()) return false;
+        if (input.ingredientCount() != ingredients.size()) return false;
 
         List<ItemStack> inputStacks = new ArrayList<>();
-        for (int i = 0; i < input.getSize(); i++) {
-            ItemStack st = input.getStackInSlot(i);
+        for (int i = 0; i < input.size(); i++) {
+            ItemStack st = input.getItem(i);
             if (!st.isEmpty()) inputStacks.add(st);
         }
 
@@ -661,47 +660,47 @@ public class CustomRecipeDispatcher {
         return true;
     }
 
-    public static CraftingRecipeCategory getCraftingCategory(Item item) {
-        if (item == null || item == Items.AIR) return CraftingRecipeCategory.MISC;
-        if (item.getComponents() != null) {
-            if (item.getComponents().contains(net.minecraft.component.DataComponentTypes.TOOL) ||
-                item.getComponents().contains(net.minecraft.component.DataComponentTypes.MAX_DAMAGE)) {
-                return CraftingRecipeCategory.EQUIPMENT;
+    public static CraftingBookCategory getCraftingCategory(Item item) {
+        if (item == null || item == Items.AIR) return CraftingBookCategory.MISC;
+        if (item.components() != null) {
+            if (item.components().has(DataComponents.TOOL) ||
+                item.components().has(DataComponents.MAX_DAMAGE)) {
+                return CraftingBookCategory.EQUIPMENT;
             }
         }
-        if (item instanceof net.minecraft.item.BlockItem bi) {
+        if (item instanceof net.minecraft.world.item.BlockItem bi) {
             var block = bi.getBlock();
-            if (block instanceof net.minecraft.block.RedstoneWireBlock ||
-                block instanceof net.minecraft.block.RepeaterBlock ||
-                block instanceof net.minecraft.block.ComparatorBlock ||
-                block instanceof net.minecraft.block.RedstoneTorchBlock ||
-                block instanceof net.minecraft.block.HopperBlock ||
-                block instanceof net.minecraft.block.DropperBlock ||
-                block instanceof net.minecraft.block.DispenserBlock ||
-                block instanceof net.minecraft.block.LeverBlock ||
-                block instanceof net.minecraft.block.ButtonBlock ||
-                block instanceof net.minecraft.block.PressurePlateBlock ||
-                block instanceof net.minecraft.block.ObserverBlock ||
-                block instanceof net.minecraft.block.DaylightDetectorBlock ||
-                block instanceof net.minecraft.block.TripwireHookBlock ||
-                block instanceof net.minecraft.block.TargetBlock ||
-                block instanceof net.minecraft.block.CrafterBlock) {
-                return CraftingRecipeCategory.REDSTONE;
+            if (block instanceof RedStoneWireBlock ||
+                block instanceof RepeaterBlock ||
+                block instanceof ComparatorBlock ||
+                block instanceof RedstoneTorchBlock ||
+                block instanceof HopperBlock ||
+                block instanceof DropperBlock ||
+                block instanceof DispenserBlock ||
+                block instanceof LeverBlock ||
+                block instanceof ButtonBlock ||
+                block instanceof PressurePlateBlock ||
+                block instanceof ObserverBlock ||
+                block instanceof DaylightDetectorBlock ||
+                block instanceof TripWireHookBlock ||
+                block instanceof TargetBlock ||
+                block instanceof CrafterBlock) {
+                return CraftingBookCategory.REDSTONE;
             }
-            return CraftingRecipeCategory.BUILDING;
+            return CraftingBookCategory.BUILDING;
         }
-        return CraftingRecipeCategory.MISC;
+        return CraftingBookCategory.MISC;
     }
 
-    public static CookingRecipeCategory getCookingCategory(Item item) {
-        if (item == null || item == Items.AIR) return CookingRecipeCategory.MISC;
-        if (item.getComponents() != null && item.getComponents().contains(net.minecraft.component.DataComponentTypes.FOOD)) {
-            return CookingRecipeCategory.FOOD;
+    public static CookingBookCategory getCookingCategory(Item item) {
+        if (item == null || item == Items.AIR) return CookingBookCategory.MISC;
+        if (item.components() != null && item.components().has(DataComponents.FOOD)) {
+            return CookingBookCategory.FOOD;
         }
-        if (item instanceof net.minecraft.item.BlockItem) {
-            return CookingRecipeCategory.BLOCKS;
+        if (item instanceof net.minecraft.world.item.BlockItem) {
+            return CookingBookCategory.BLOCKS;
         }
-        return CookingRecipeCategory.MISC;
+        return CookingBookCategory.MISC;
     }
 
     @SuppressWarnings("unchecked")
@@ -709,18 +708,18 @@ public class CustomRecipeDispatcher {
         Item resultItem = data.getResultItem();
         if (resultItem == Items.AIR) return null;
 
-        int safeCount = Math.min(resultItem.getMaxCount(), Math.max(1, data.getResultCountForType(typeEnum)));
+        int safeCount = Math.min(resultItem.getDefaultMaxStackSize(), Math.max(1, data.getResultCountForType(typeEnum)));
         ItemStack resultStack = new ItemStack(resultItem, safeCount);
         String group = "";
 
         if (typeEnum == RecipeTypeEnum.SHAPED_CRAFTING) {
-            CraftingRecipeCategory category = getCraftingCategory(resultItem);
+            CraftingBookCategory category = getCraftingCategory(resultItem);
             if (data.isShapeless) {
-                net.minecraft.util.collection.DefaultedList<Ingredient> ingredients = net.minecraft.util.collection.DefaultedList.of();
+                NonNullList<Ingredient> ingredients = NonNullList.create();
                 ingredients.addAll(data.getNonEmptyIngredients());
                 return (T) new ShapelessRecipe(group, category, resultStack, ingredients);
             }
-            RawShapedRecipe raw = data.getRawRecipe();
+            ShapedRecipePattern raw = data.getRawRecipe();
             if (raw == null) return null;
             return (T) new ShapedRecipe(group, category, raw, resultStack, true);
         } else if (typeEnum == RecipeTypeEnum.SMELTING) {
@@ -742,7 +741,7 @@ public class CustomRecipeDispatcher {
         } else if (typeEnum == RecipeTypeEnum.STONECUTTING) {
             Ingredient ing = data.getIngredientAt(0);
             if (ing == null) return null;
-            return (T) new StonecuttingRecipe(group, ing, resultStack);
+            return (T) new StonecutterRecipe(group, ing, resultStack);
         } else if (typeEnum == RecipeTypeEnum.SMITHING) {
             Optional<Ingredient> template = data.createIngredientForSlot(0);
             Optional<Ingredient> base = data.createIngredientForSlot(1);
@@ -753,64 +752,64 @@ public class CustomRecipeDispatcher {
         return null;
     }
 
-    public static void sendCustomRecipeBookEntries(ServerPlayerEntity player) {
+    public static void sendCustomRecipeBookEntries(ServerPlayer player) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        if (player == null || player.networkHandler == null) return;
+        if (player == null || player.connection == null) return;
         try {
-            Collection<RecipeEntry<?>> custom = getAllCustomRecipes();
+            Collection<RecipeHolder<?>> custom = getAllCustomRecipes();
             if (!custom.isEmpty()) {
                 if (player.server != null) {
-                    player.networkHandler.sendPacket(new SynchronizeRecipesS2CPacket(player.server.getRecipeManager().values()));
+                    player.connection.send(new ClientboundUpdateRecipesPacket(player.server.getRecipeManager().getRecipes()));
                 }
-                List<Identifier> ids = new ArrayList<>();
-                for (RecipeEntry<?> entry : custom) {
+                List<ResourceLocation> ids = new ArrayList<>();
+                for (RecipeHolder<?> entry : custom) {
                     ids.add(entry.id());
                     RECORDED_CUSTOM_ENTRIES.put(entry.id(), entry);
                     player.getRecipeBook().add(entry);
-                    player.getRecipeBook().display(entry);
+                    player.getRecipeBook().addHighlight(entry);
                 }
-                player.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.ChangeUnlockedRecipesS2CPacket(
-                    net.minecraft.network.packet.s2c.play.ChangeUnlockedRecipesS2CPacket.Action.ADD,
+                player.connection.send(new ClientboundRecipePacket(
+                    ClientboundRecipePacket.State.ADD,
                     ids,
                     ids,
-                    player.getRecipeBook().getOptions()
+                    player.getRecipeBook().getBookSettings()
                 ));
             }
         } catch (Throwable ignored) {}
     }
 
-    public static synchronized void syncRecipeBookToPlayers(Iterable<ServerPlayerEntity> players) {
+    public static synchronized void syncRecipeBookToPlayers(Iterable<ServerPlayer> players) {
         if (com.recipeeditor.RecipeEditorMod.isDedicatedServer()) return;
-        Collection<RecipeEntry<?>> custom = getAllCustomRecipes();
-        List<Identifier> ids = new ArrayList<>();
-        Set<Identifier> currentIds = new HashSet<>();
-        for (RecipeEntry<?> entry : custom) {
+        Collection<RecipeHolder<?>> custom = getAllCustomRecipes();
+        List<ResourceLocation> ids = new ArrayList<>();
+        Set<ResourceLocation> currentIds = new HashSet<>();
+        for (RecipeHolder<?> entry : custom) {
             ids.add(entry.id());
             currentIds.add(entry.id());
             RECORDED_CUSTOM_ENTRIES.put(entry.id(), entry);
         }
 
-        List<Identifier> removedIds = new ArrayList<>();
-        for (Map.Entry<Identifier, RecipeEntry<?>> recorded : RECORDED_CUSTOM_ENTRIES.entrySet()) {
+        List<ResourceLocation> removedIds = new ArrayList<>();
+        for (Map.Entry<ResourceLocation, RecipeHolder<?>> recorded : RECORDED_CUSTOM_ENTRIES.entrySet()) {
             if (!currentIds.contains(recorded.getKey())) {
                 removedIds.add(recorded.getKey());
                 RECENTLY_REMOVED_RECIPES.put(recorded.getKey(), recorded.getValue());
             }
         }
-        for (Identifier remId : removedIds) {
+        for (ResourceLocation remId : removedIds) {
             RECORDED_CUSTOM_ENTRIES.remove(remId);
         }
 
-        for (ServerPlayerEntity player : players) {
-            if (player == null || player.networkHandler == null || player.server == null) continue;
+        for (ServerPlayer player : players) {
+            if (player == null || player.connection == null || player.server == null) continue;
             try {
-                // 1. Send SynchronizeRecipesS2CPacket FIRST so the client recipeManager has the synthetic recipes
-                player.networkHandler.sendPacket(new SynchronizeRecipesS2CPacket(player.server.getRecipeManager().values()));
+                // 1. Send ClientboundUpdateRecipesPacket FIRST so the client recipeManager has the synthetic recipes
+                player.connection.send(new ClientboundUpdateRecipesPacket(player.server.getRecipeManager().getRecipes()));
 
                 // 2. Remove any deleted custom recipes from the player's recipe book
                 if (!removedIds.isEmpty()) {
-                    for (Identifier remId : removedIds) {
-                        RecipeEntry<?> remEntry = RECENTLY_REMOVED_RECIPES.get(remId);
+                    for (ResourceLocation remId : removedIds) {
+                        RecipeHolder<?> remEntry = RECENTLY_REMOVED_RECIPES.get(remId);
                         if (remEntry != null) {
                             player.getRecipeBook().remove(remEntry);
                         }
@@ -818,38 +817,38 @@ public class CustomRecipeDispatcher {
                             ((com.recipeeditor.mixin.RecipeBookInvoker) player.getRecipeBook()).recipeeditor$invokeRemove(remId);
                         } catch (Throwable ignored) {}
                     }
-                    player.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.ChangeUnlockedRecipesS2CPacket(
-                        net.minecraft.network.packet.s2c.play.ChangeUnlockedRecipesS2CPacket.Action.REMOVE,
+                    player.connection.send(new ClientboundRecipePacket(
+                        ClientboundRecipePacket.State.REMOVE,
                         removedIds,
                         Collections.emptyList(),
-                        player.getRecipeBook().getOptions()
+                        player.getRecipeBook().getBookSettings()
                     ));
                 }
 
                 // 3. Add and display all active custom recipes
-                for (RecipeEntry<?> entry : custom) {
+                for (RecipeHolder<?> entry : custom) {
                     player.getRecipeBook().add(entry);
-                    player.getRecipeBook().display(entry);
+                    player.getRecipeBook().addHighlight(entry);
                 }
                 if (!ids.isEmpty()) {
-                    player.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.ChangeUnlockedRecipesS2CPacket(
-                        net.minecraft.network.packet.s2c.play.ChangeUnlockedRecipesS2CPacket.Action.ADD,
+                    player.connection.send(new ClientboundRecipePacket(
+                        ClientboundRecipePacket.State.ADD,
                         ids,
                         ids,
-                        player.getRecipeBook().getOptions()
+                        player.getRecipeBook().getBookSettings()
                     ));
                 }
             } catch (Throwable ignored) {}
         }
 
         try {
-            net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
+            net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
             if (client != null && client.player != null && client.player.getRecipeBook() != null) {
                 client.execute(() -> {
                     try {
-                        net.minecraft.client.recipebook.ClientRecipeBook clientBook = client.player.getRecipeBook();
-                        for (Identifier remId : removedIds) {
-                            RecipeEntry<?> remEntry = RECENTLY_REMOVED_RECIPES.get(remId);
+                        net.minecraft.client.ClientRecipeBook clientBook = client.player.getRecipeBook();
+                        for (ResourceLocation remId : removedIds) {
+                            RecipeHolder<?> remEntry = RECENTLY_REMOVED_RECIPES.get(remId);
                             if (remEntry != null) {
                                 clientBook.remove(remEntry);
                             }
@@ -857,16 +856,16 @@ public class CustomRecipeDispatcher {
                                 ((com.recipeeditor.mixin.RecipeBookInvoker) clientBook).recipeeditor$invokeRemove(remId);
                             } catch (Throwable ignored) {}
                         }
-                        for (RecipeEntry<?> entry : custom) {
+                        for (RecipeHolder<?> entry : custom) {
                             clientBook.add(entry);
-                            clientBook.display(entry);
+                            clientBook.addHighlight(entry);
                         }
-                        if (client.world != null && client.getNetworkHandler() != null && client.getNetworkHandler().getRecipeManager() != null) {
-                            clientBook.reload(client.getNetworkHandler().getRecipeManager().sortedValues(), client.world.getRegistryManager());
+                        if (client.level != null && client.getConnection() != null && client.getConnection().getRecipeManager() != null) {
+                            clientBook.setupCollections(client.getConnection().getRecipeManager().getOrderedRecipes(), client.level.registryAccess());
                         }
-                        clientBook.getOrderedResults().forEach(r -> r.initialize(clientBook));
-                        if (client.currentScreen instanceof net.minecraft.client.gui.screen.recipebook.RecipeBookProvider provider) {
-                            provider.refreshRecipeBook();
+                        clientBook.getCollections().forEach(r -> r.updateKnownRecipes(clientBook));
+                        if (client.screen instanceof net.minecraft.client.gui.screens.recipebook.RecipeUpdateListener listener) {
+                            listener.recipesUpdated();
                         }
                     } catch (Throwable ignored) {}
                 });
@@ -875,8 +874,8 @@ public class CustomRecipeDispatcher {
     }
 
     public static void syncRecipesToAllPlayers(MinecraftServer server) {
-        if (server != null && server.getPlayerManager() != null) {
-            syncRecipeBookToPlayers(server.getPlayerManager().getPlayerList());
+        if (server != null && server.getPlayerList() != null) {
+            syncRecipeBookToPlayers(server.getPlayerList().getPlayers());
         }
     }
 }

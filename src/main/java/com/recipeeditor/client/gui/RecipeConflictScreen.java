@@ -3,16 +3,17 @@ package com.recipeeditor.client.gui;
 import com.recipeeditor.config.CustomRecipeData;
 import com.recipeeditor.config.RecipeTypeEnum;
 import com.recipeeditor.inspector.RecipeConflictInfo;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.GuiGraphics;
+import com.recipeeditor.client.gui.DrawContext;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.List;
 
@@ -33,7 +34,7 @@ public class RecipeConflictScreen extends Screen {
     private int dragScrollStartOffset = 0;
 
     public RecipeConflictScreen(Screen parent, List<RecipeConflictInfo> conflicts, Runnable onConfirmOverride) {
-        super(Text.translatable("recipeeditor.gui.conflict_title"));
+        super(Component.translatable("recipeeditor.gui.conflict_title"));
         this.parent = parent;
         this.conflicts = conflicts != null ? conflicts : List.of();
         this.onConfirmOverride = onConfirmOverride;
@@ -60,6 +61,10 @@ public class RecipeConflictScreen extends Screen {
         return (int) Math.ceil(this.height / uiScale);
     }
 
+    private static boolean isLeftClick(int button) {
+        return button == 0;
+    }
+
     @Override
     protected void init() {
         updateUiScale();
@@ -73,36 +78,36 @@ public class RecipeConflictScreen extends Screen {
         if (onConfirmOverride != null) {
             int startX = (vWidth - (btnW * 2 + spacing)) / 2;
 
-            this.addDrawableChild(ButtonWidget.builder(
-                    Text.translatable("recipeeditor.gui.conflict_override").formatted(Formatting.GOLD),
+            this.addRenderableWidget(Button.builder(
+                    Component.translatable("recipeeditor.gui.conflict_override").withStyle(ChatFormatting.GOLD),
                     btn -> {
-                        this.close();
+                        this.onClose();
                         if (onConfirmOverride != null) {
                             onConfirmOverride.run();
                         }
                     })
-                    .dimensions(startX, btnY, btnW, 20)
+                    .bounds(startX, btnY, btnW, 20)
                     .build());
 
-            this.addDrawableChild(ButtonWidget.builder(
-                    Text.translatable("recipeeditor.gui.conflict_cancel"),
-                    btn -> this.close())
-                    .dimensions(startX + btnW + spacing, btnY, btnW, 20)
+            this.addRenderableWidget(Button.builder(
+                    Component.translatable("recipeeditor.gui.conflict_cancel"),
+                    btn -> this.onClose())
+                    .bounds(startX + btnW + spacing, btnY, btnW, 20)
                     .build());
         } else {
             int startX = (vWidth - btnW) / 2;
-            this.addDrawableChild(ButtonWidget.builder(
-                    Text.translatable("recipeeditor.gui.conflict_dismiss"),
-                    btn -> this.close())
-                    .dimensions(startX, btnY, btnW, 20)
+            this.addRenderableWidget(Button.builder(
+                    Component.translatable("recipeeditor.gui.conflict_dismiss"),
+                    btn -> this.onClose())
+                    .bounds(startX, btnY, btnW, 20)
                     .build());
         }
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(this.parent);
         }
     }
 
@@ -124,13 +129,13 @@ public class RecipeConflictScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean bl) {
-        double sX = click.x() / uiScale;
-        double sY = click.y() / uiScale;
-        int button = click.button();
-        Click scaledClick = new Click(sX, sY, click.buttonInfo());
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        double sX = event.x() / uiScale;
+        double sY = event.y() / uiScale;
+        int button = event.button();
+        MouseButtonEvent scaledEvent = new MouseButtonEvent(sX, sY, event.buttonInfo());
 
-        if (button == 0 && maxScroll > 0) {
+        if (isLeftClick(button) && maxScroll > 0) {
             int vWidth = getVirtualWidth();
             int vHeight = getVirtualHeight();
             int listTop = 40;
@@ -147,26 +152,26 @@ public class RecipeConflictScreen extends Screen {
                 return true;
             }
         }
-        return super.mouseClicked(scaledClick, bl);
+        return super.mouseClicked(scaledEvent, doubleClick);
     }
 
     @Override
-    public boolean mouseReleased(Click click) {
-        double sX = click.x() / uiScale;
-        double sY = click.y() / uiScale;
-        Click scaledClick = new Click(sX, sY, click.buttonInfo());
+    public boolean mouseReleased(MouseButtonEvent event) {
+        double sX = event.x() / uiScale;
+        double sY = event.y() / uiScale;
+        MouseButtonEvent scaledEvent = new MouseButtonEvent(sX, sY, event.buttonInfo());
         isDraggingScroll = false;
-        return super.mouseReleased(scaledClick);
+        return super.mouseReleased(scaledEvent);
     }
 
     @Override
-    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
-        double sX = click.x() / uiScale;
-        double sY = click.y() / uiScale;
-        int button = click.button();
-        Click scaledClick = new Click(sX, sY, click.buttonInfo());
+    public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+        double sX = event.x() / uiScale;
+        double sY = event.y() / uiScale;
+        int button = event.button();
+        MouseButtonEvent scaledEvent = new MouseButtonEvent(sX, sY, event.buttonInfo());
 
-        if (isDraggingScroll && button == 0 && maxScroll > 0) {
+        if (isDraggingScroll && isLeftClick(button) && maxScroll > 0) {
             int vHeight = getVirtualHeight();
             int listTop = 40;
             int btnY = vHeight - 28;
@@ -181,15 +186,16 @@ public class RecipeConflictScreen extends Screen {
             }
             return true;
         }
-        return super.mouseDragged(scaledClick, deltaX / uiScale, deltaY / uiScale);
+        return super.mouseDragged(scaledEvent, deltaX / uiScale, deltaY / uiScale);
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         updateUiScale();
         int vWidth = getVirtualWidth();
         int vHeight = getVirtualHeight();
 
+        DrawContext context = new DrawContext(graphics);
         context.getMatrices().pushMatrix();
         context.getMatrices().scale(uiScale, uiScale);
 
@@ -200,11 +206,11 @@ public class RecipeConflictScreen extends Screen {
         context.fill(0, 0, vWidth, vHeight, 0xCC101010);
 
         // Header
-        Text titleText = Text.literal("\u26A0 " + Text.translatable("recipeeditor.gui.conflict_title").getString() + " \u26A0").formatted(Formatting.RED, Formatting.BOLD);
-        context.drawCenteredTextWithShadow(this.textRenderer, titleText, vWidth / 2, 12, 0xFFFF5555);
+        Component titleText = Component.literal("\u26A0 ").append(Component.translatable("recipeeditor.gui.conflict_title")).append(" \u26A0").withStyle(ChatFormatting.RED, ChatFormatting.BOLD);
+        context.drawCenteredTextWithShadow(this.font, titleText, vWidth / 2, 12, 0xFFFF5555);
 
-        Text desc = Text.translatable("recipeeditor.gui.conflict_desc").formatted(Formatting.GRAY);
-        context.drawCenteredTextWithShadow(this.textRenderer, desc, vWidth / 2, 25, 0xFFAAAAAA);
+        Component desc = Component.translatable("recipeeditor.gui.conflict_desc").withStyle(ChatFormatting.GRAY);
+        context.drawCenteredTextWithShadow(this.font, desc, vWidth / 2, 25, 0xFFAAAAAA);
 
         int listTop = 40;
         int btnY = vHeight - 28;
@@ -219,7 +225,7 @@ public class RecipeConflictScreen extends Screen {
 
         renderConflictList(context, scaledMouseX, scaledMouseY, listX, listTop, listW, listH, listBottom);
 
-        super.render(context, scaledMouseX, scaledMouseY, delta);
+        super.render(graphics, scaledMouseX, scaledMouseY, delta);
 
         context.getMatrices().popMatrix();
     }
@@ -250,8 +256,8 @@ public class RecipeConflictScreen extends Screen {
                 int gridX = listX + 10;
                 int gridY = entryStartY + 4;
 
-                Text wsText = wsType.getDisplayName().copy().formatted(Formatting.YELLOW, Formatting.BOLD);
-                context.drawTextWithShadow(this.textRenderer, wsText, gridX, gridY, 0xFFFFAA00);
+                Component wsText = wsType.getDisplayName().copy().withStyle(ChatFormatting.YELLOW, ChatFormatting.BOLD);
+                context.drawTextWithShadow(this.font, wsText, gridX, gridY, 0xFFFFAA00);
 
                 int slotGridY = gridY + 11;
                 int arrowX;
@@ -319,13 +325,13 @@ public class RecipeConflictScreen extends Screen {
                 int arrowY = (wsType == RecipeTypeEnum.SHAPED_CRAFTING) ? (slotGridY + 18) : (slotGridY + 4);
                 int resY = (wsType == RecipeTypeEnum.SHAPED_CRAFTING) ? (slotGridY + 17) : slotGridY;
 
-                context.drawTextWithShadow(this.textRenderer, Text.literal("➜").formatted(Formatting.GOLD), arrowX, arrowY, 0xFFFFAA00);
+                context.drawTextWithShadow(this.font, Component.literal("➜").withStyle(ChatFormatting.GOLD), arrowX, arrowY, 0xFFFFAA00);
                 drawMiniSlot(context, resX, resY);
 
                 if (info.conflictingItem != null && info.conflictingItem != Items.AIR) {
                     ItemStack resSt = new ItemStack(info.conflictingItem);
                     context.drawItem(resSt, resX + 1, resY + 1);
-                    context.drawStackOverlay(this.textRenderer, resSt, resX + 1, resY + 1);
+                    context.drawStackOverlay(this.font, resSt, resX + 1, resY + 1);
                     if (isHovered(mouseX, mouseY, resX, resY, 18, 18, listTop, listH)) {
                         hoveredStack = resSt;
                     }
@@ -337,26 +343,26 @@ public class RecipeConflictScreen extends Screen {
                 int textW = listW - (textX - listX) - 16;
 
                 if (textW > 40) {
-                    Text usedByHeader = Text.translatable("recipeeditor.gui.conflict_used_by", info.getConflictingItemName().getString()).formatted(Formatting.WHITE, Formatting.BOLD);
-                    List<OrderedText> wrappedUsedBy = this.textRenderer.wrapLines(usedByHeader, textW);
+                    Component usedByHeader = Component.translatable("recipeeditor.gui.conflict_used_by", info.getConflictingItemName().getString()).withStyle(ChatFormatting.WHITE, ChatFormatting.BOLD);
+                    List<FormattedCharSequence> wrappedUsedBy = this.font.split(usedByHeader, textW);
                     for (int l = 0; l < Math.min(2, wrappedUsedBy.size()); l++) {
-                        context.drawTextWithShadow(this.textRenderer, wrappedUsedBy.get(l), textX, textY, 0xFFFF5555);
+                        context.drawTextWithShadow(this.font, wrappedUsedBy.get(l), textX, textY, 0xFFFF5555);
                         textY += 10;
                     }
 
                     if (info.conflictingRecipeId != null && !info.conflictingRecipeId.isEmpty()) {
-                        Text idText = Text.literal("ID: " + info.conflictingRecipeId).formatted(Formatting.DARK_GRAY);
-                        List<OrderedText> wrappedId = this.textRenderer.wrapLines(idText, textW);
+                        Component idText = Component.literal("ID: " + info.conflictingRecipeId).withStyle(ChatFormatting.DARK_GRAY);
+                        List<FormattedCharSequence> wrappedId = this.font.split(idText, textW);
                         if (!wrappedId.isEmpty()) {
-                            context.drawTextWithShadow(this.textRenderer, wrappedId.get(0), textX, textY, 0xFF888888);
+                            context.drawTextWithShadow(this.font, wrappedId.get(0), textX, textY, 0xFF888888);
                             textY += 10;
                         }
                     }
 
-                    Text sourceText = Text.translatable("recipeeditor.gui.conflict_source", info.sourceName).formatted(Formatting.YELLOW);
-                    List<OrderedText> wrappedSource = this.textRenderer.wrapLines(sourceText, textW);
+                    Component sourceText = Component.translatable("recipeeditor.gui.conflict_source", info.sourceName).withStyle(ChatFormatting.YELLOW);
+                    List<FormattedCharSequence> wrappedSource = this.font.split(sourceText, textW);
                     for (int l = 0; l < Math.min(2, wrappedSource.size()); l++) {
-                        context.drawTextWithShadow(this.textRenderer, wrappedSource.get(l), textX, textY, 0xFFFFAA00);
+                        context.drawTextWithShadow(this.font, wrappedSource.get(l), textX, textY, 0xFFFFAA00);
                         textY += 10;
                     }
                 }
@@ -382,7 +388,7 @@ public class RecipeConflictScreen extends Screen {
 
         // Item Tooltips
         if (!hoveredStack.isEmpty()) {
-            context.drawItemTooltip(this.textRenderer, hoveredStack, mouseX, mouseY);
+            context.drawItemTooltip(this.font, hoveredStack, mouseX, mouseY);
         }
     }
 

@@ -5,8 +5,8 @@ import dev.architectury.event.EventResult;
 import me.shedaniel.rei.api.client.REIRuntime;
 import me.shedaniel.rei.api.client.plugins.REIClientPlugin;
 import me.shedaniel.rei.api.client.registry.display.DisplayRegistry;
-import net.minecraft.recipe.RecipeEntry;
-import net.minecraft.util.Identifier;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.resources.Identifier;
 
 public class RecipeEditorReiClientPlugin implements REIClientPlugin {
 
@@ -18,7 +18,7 @@ public class RecipeEditorReiClientPlugin implements REIClientPlugin {
         // Register visibility predicate to hide any vanilla or modded recipes that were overridden
         registry.registerVisibilityPredicate((category, display) -> {
             Object origin = registry.getDisplayOrigin(display);
-            if (origin instanceof RecipeEntry<?> entry && CustomRecipeDispatcher.isRecipeOverridden(entry)) {
+            if (origin instanceof RecipeHolder<?> entry && CustomRecipeDispatcher.isRecipeOverridden(entry)) {
                 return EventResult.interruptFalse();
             }
             if (display.getDisplayLocation().isPresent()) {

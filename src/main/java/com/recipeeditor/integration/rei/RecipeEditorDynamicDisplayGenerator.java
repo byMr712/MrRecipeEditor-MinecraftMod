@@ -21,12 +21,12 @@ import me.shedaniel.rei.plugin.common.displays.cooking.DefaultSmeltingDisplay;
 import me.shedaniel.rei.plugin.common.displays.cooking.DefaultSmokingDisplay;
 import me.shedaniel.rei.plugin.common.displays.crafting.DefaultCustomShapedDisplay;
 import me.shedaniel.rei.plugin.common.displays.crafting.DefaultCustomShapelessDisplay;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.recipe.Ingredient;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 
 import java.util.*;
 
@@ -47,7 +47,7 @@ public class RecipeEditorDynamicDisplayGenerator implements DynamicDisplayGenera
             return Optional.empty();
         }
         Item item = stack.getItem();
-        Identifier itemId = Registries.ITEM.getId(item);
+        Identifier itemId = BuiltInRegistries.ITEM.getKey(item);
         if (itemId == null) {
             return Optional.empty();
         }
@@ -162,7 +162,7 @@ public class RecipeEditorDynamicDisplayGenerator implements DynamicDisplayGenera
         Item resultItem = data.getResultItem();
         if (resultItem == Items.AIR) return null;
 
-        int safeCount = Math.min(resultItem.getMaxCount(), Math.max(1, data.getResultCountForType(data.type)));
+        int safeCount = Math.min(resultItem.getDefaultInstance().getMaxStackSize(), Math.max(1, data.getResultCountForType(data.type)));
         ItemStack resultStack = new ItemStack(resultItem, safeCount);
         EntryIngredient output = EntryIngredients.of(resultStack);
         Optional<Identifier> location = Optional.of(CustomRecipeDispatcher.getRecipeIdentifier(data));

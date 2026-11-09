@@ -34,6 +34,16 @@ loom {
     }
 }
 
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "recipeeditor-test"
+        enableGameTests = false
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     if (project.hasProperty('yarn_mappings') && !project.property('yarn_mappings').toString().trim().isEmpty()) {
@@ -45,6 +55,7 @@ dependencies {
     def fabricApi = project.findProperty('fabric_api_version') ?: project.findProperty('fabric_version')
     if (fabricApi) {
         modLocalRuntime "net.fabricmc.fabric-api:fabric-api:${fabricApi}"
+        gametestImplementation "net.fabricmc.fabric-api:fabric-api:${fabricApi}"
     }
 
     if (project.hasProperty('modmenu_version') && !project.property('modmenu_version').toString().trim().isEmpty()) {
@@ -66,6 +77,10 @@ processResources {
     filesMatching("fabric.mod.json") {
         expand "version": project.version
     }
+}
+
+tasks.matching { it.name == 'runClientGameTest' }.configureEach {
+    jvmArgs '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
 }
 
 def targetJavaVersion = project.minecraft_version.startsWith('26') ? 25 : 21

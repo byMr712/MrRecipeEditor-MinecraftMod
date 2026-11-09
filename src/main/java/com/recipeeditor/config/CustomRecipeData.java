@@ -270,7 +270,8 @@ public class CustomRecipeData {
             if (!items.isEmpty()) {
                 return Ingredient.of(items.toArray(new Item[0]));
             }
-            return null;
+            TagKey<Item> tagKey = tagId != null ? TagKey.create(Registries.ITEM, tagId) : TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("minecraft", "empty"));
+            return Ingredient.of(new EmptyTagHolderSet(tagKey));
         }
         Item item = getItemAt(slot);
         if (item != Items.AIR) {
@@ -380,5 +381,20 @@ public class CustomRecipeData {
         int result = Objects.hash(id, resultItemId, resultCount, type, experience, cookingTime, enabled, overrideExisting, overriddenId, overriddenKey, isShapeless, typeCounts);
         result = 31 * result + Arrays.hashCode(patternSlots);
         return result;
+    }
+
+    private static final class EmptyTagHolderSet implements net.minecraft.core.HolderSet<Item> {
+        private final TagKey<Item> tagKey;
+        EmptyTagHolderSet(TagKey<Item> tagKey) { this.tagKey = tagKey; }
+        @Override public java.util.stream.Stream<net.minecraft.core.Holder<Item>> stream() { return java.util.stream.Stream.empty(); }
+        @Override public int size() { return 0; }
+        @Override public boolean isBound() { return true; }
+        @Override public com.mojang.datafixers.util.Either<TagKey<Item>, java.util.List<net.minecraft.core.Holder<Item>>> unwrap() { return com.mojang.datafixers.util.Either.left(tagKey); }
+        @Override public java.util.Optional<net.minecraft.core.Holder<Item>> getRandomElement(net.minecraft.util.RandomSource random) { return java.util.Optional.empty(); }
+        @Override public net.minecraft.core.Holder<Item> get(int index) { throw new IndexOutOfBoundsException(index); }
+        @Override public boolean contains(net.minecraft.core.Holder<Item> holder) { return false; }
+        @Override public boolean canSerializeIn(net.minecraft.core.HolderOwner<Item> owner) { return true; }
+        @Override public java.util.Optional<TagKey<Item>> unwrapKey() { return java.util.Optional.of(tagKey); }
+        @Override public java.util.Iterator<net.minecraft.core.Holder<Item>> iterator() { return java.util.Collections.emptyIterator(); }
     }
 }

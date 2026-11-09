@@ -27,22 +27,33 @@ repositories {
 }
 
 loom {
-    if (!project.hasProperty('yarn_mappings') || project.property('yarn_mappings').toString().trim().isEmpty()) {
+    if (project.minecraft_version.startsWith('26')) {
         noIntermediateMappings()
     }
 }
 
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "recipeeditor-test"
+        enableGameTests = false
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    if (project.hasProperty('yarn_mappings') && !project.property('yarn_mappings').toString().trim().isEmpty()) {
-        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    if (!project.minecraft_version.startsWith('26')) {
+        mappings loom.officialMojangMappings()
     } else {
         mappings files("empty-mappings.jar")
     }
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     def fabricApi = project.findProperty('fabric_api_version') ?: project.findProperty('fabric_version')
     if (fabricApi) {
-        modLocalRuntime "net.fabricmc.fabric-api:fabric-api:${fabricApi}"
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${fabricApi}"
     }
 
     if (project.hasProperty('modmenu_version') && !project.property('modmenu_version').toString().trim().isEmpty()) {
@@ -64,6 +75,10 @@ processResources {
     filesMatching("fabric.mod.json") {
         expand "version": project.version
     }
+}
+
+tasks.matching { it.name == 'runClientGameTest' }.configureEach {
+    jvmArgs '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
 }
 
 def targetJavaVersion = project.minecraft_version.startsWith('26') ? 25 : 21
@@ -138,76 +153,6 @@ task jarNeoForge(type: Jar) {
     }
     from("LICENSE")
 
-    doLast {
-        if (project.hasProperty('yarn_mappings') && !project.property('yarn_mappings').toString().trim().isEmpty()) {
-            def jarPath = archiveFile.get().asFile.toPath()
-            def tmpIntermediary = java.nio.file.Files.createTempFile("neoforge-intermediary-", ".jar")
-            def tmpMojang = java.nio.file.Files.createTempFile("neoforge-mojang-", ".jar")
-            java.nio.file.Files.deleteIfExists(tmpIntermediary)
-            java.nio.file.Files.deleteIfExists(tmpMojang)
-
-            def loomCacheVerDir = new File(gradle.gradleUserHomeDir, "caches/fabric-loom/${project.minecraft_version}")
-            def yarnTiny = fileTree(loomCacheVerDir).matching { include "net.fabricmc.yarn*/**/mappings.tiny" }.files.sort().last().toPath()
-            def mojTinyFiles = fileTree(loomCacheVerDir).matching { include "loom.mappings.*2198*/**/mappings.tiny" }.files.sort()
-            if (mojTinyFiles.isEmpty()) {
-                configurations.detachedConfiguration(loom.officialMojangMappings()).resolve()
-                mojTinyFiles = fileTree(loomCacheVerDir).matching { include "loom.mappings.*/**/mappings.tiny" }.files.sort()
-            }
-            def mojTiny = mojTinyFiles.first().toPath()
-            def interMc = fileTree(new File(gradle.gradleUserHomeDir, "caches/fabric-loom/minecraftMaven")).matching {
-                include "**/minecraft-merged-intermediary-${project.minecraft_version}-*.jar"
-            }.files.sort().last().toPath()
-            def cpPaths = sourceSets.main.compileClasspath.files.findAll { it.exists() }.collect { it.toPath() } as java.nio.file.Path[]
-
-            try {
-                def remapper1 = net.fabricmc.tinyremapper.TinyRemapper.newRemapper()
-                        .withMappings(net.fabricmc.tinyremapper.TinyUtils.createTinyMappingProvider(yarnTiny, "named", "intermediary"))
-                        .ignoreFieldDesc(true)
-                        .ignoreConflicts(true)
-                        .extension(new net.fabricmc.tinyremapper.extension.mixin.MixinExtension())
-                        .build()
-                try {
-                    def out1 = new net.fabricmc.tinyremapper.OutputConsumerPath.Builder(tmpIntermediary).build()
-                    try {
-                        out1.addNonClassFiles(jarPath, net.fabricmc.tinyremapper.NonClassCopyMode.FIX_META_INF, remapper1)
-                        remapper1.readInputs(jarPath)
-                        remapper1.readClassPath(cpPaths)
-                        remapper1.apply(out1)
-                    } finally {
-                        out1.close()
-                    }
-                } finally {
-                    remapper1.finish()
-                }
-
-                def remapper2 = net.fabricmc.tinyremapper.TinyRemapper.newRemapper()
-                        .withMappings(net.fabricmc.tinyremapper.TinyUtils.createTinyMappingProvider(mojTiny, "intermediary", "named"))
-                        .ignoreFieldDesc(true)
-                        .ignoreConflicts(true)
-                        .extension(new net.fabricmc.tinyremapper.extension.mixin.MixinExtension())
-                        .build()
-                try {
-                    def out2 = new net.fabricmc.tinyremapper.OutputConsumerPath.Builder(tmpMojang).build()
-                    try {
-                        out2.addNonClassFiles(tmpIntermediary, net.fabricmc.tinyremapper.NonClassCopyMode.FIX_META_INF, remapper2)
-                        remapper2.readInputs(tmpIntermediary)
-                        remapper2.readClassPath([interMc] as java.nio.file.Path[])
-                        remapper2.apply(out2)
-                    } finally {
-                        out2.close()
-                    }
-                } finally {
-                    remapper2.finish()
-                }
-
-                java.nio.file.Files.move(tmpMojang, jarPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-                println ">>> Remapped ${archiveFileName.get()} from Yarn to Official Mojang Mappings for NeoForge!"
-            } finally {
-                java.nio.file.Files.deleteIfExists(tmpIntermediary)
-                java.nio.file.Files.deleteIfExists(tmpMojang)
-            }
-        }
-    }
 }
 
 build.dependsOn(jarNeoForge)

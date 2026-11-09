@@ -1,34 +1,88 @@
 package com.recipeeditor.client.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.recipeeditor.mixin.client.TextFieldWidgetAccessor;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
-import net.minecraft.util.Util;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.network.chat.Component;
 
-public class SelectableTextFieldWidget extends TextFieldWidget {
-    private final TextRenderer textRenderer;
+public class SelectableTextFieldWidget extends EditBox {
+    private final Font font;
     private int dragAnchor = -1;
     private boolean isDraggingSelection = false;
     private long lastClickTime = 0L;
     private double lastClickX = -1;
     private double lastClickY = -1;
 
-    public SelectableTextFieldWidget(TextRenderer textRenderer, int x, int y, int width, int height, Text text) {
-        super(textRenderer, x, y, width, height, text);
-        this.textRenderer = textRenderer;
+    private static boolean isLeftClick(int button) {
+        return button == InputConstants.MOUSE_BUTTON_LEFT || button == 0;
+    }
+
+    public SelectableTextFieldWidget(Font font, int x, int y, int width, int height, Component text) {
+        super(font, x, y, width, height, text);
+        this.font = font;
+    }
+
+    public String getText() {
+        return getValue();
+    }
+
+    public void setText(String text) {
+        setValue(text);
+    }
+
+    public void setPlaceholder(Component hint) {
+        setHint(hint);
+    }
+
+    public boolean isVisible() {
+        return this.visible;
+    }
+
+    public void setVisible(boolean visible) {
+        this.visible = visible;
+    }
+
+    public void setChangedListener(java.util.function.Consumer<String> responder) {
+        setResponder(responder);
+    }
+
+    public boolean drawsBackground() {
+        return isBordered();
+    }
+
+    public void setDrawsBackground(boolean draws) {
+        setBordered(draws);
+    }
+
+    public int getCursor() {
+        return getCursorPosition();
+    }
+
+    public void setCursor(int pos, boolean shiftKeyDown) {
+        setCursorPosition(pos);
+    }
+
+    public void setSelectionEnd(int pos) {
+        setHighlightPos(pos);
+    }
+
+    public void setCursorToStart(boolean shiftKeyDown) {
+        moveCursorToStart(shiftKeyDown);
+    }
+
+    public void setCursorToEnd(boolean shiftKeyDown) {
+        moveCursorToEnd(shiftKeyDown);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         boolean result = super.mouseClicked(mouseX, mouseY, button);
-        if (result && button == 0) {
-            long now = Util.getMeasuringTimeMs();
+        if (result && isLeftClick(button)) {
+            long now = System.currentTimeMillis();
             if (now - lastClickTime < 300L && Math.abs(mouseX - lastClickX) < 5.0 && Math.abs(mouseY - lastClickY) < 5.0) {
-                // Double click: select all text in the field
                 this.setCursorToStart(false);
-                this.setSelectionEnd(this.getText().length());
+                this.setSelectionEnd(this.getValue().length());
                 this.dragAnchor = 0;
                 this.isDraggingSelection = false;
                 this.lastClickTime = 0L;
@@ -37,7 +91,7 @@ public class SelectableTextFieldWidget extends TextFieldWidget {
             this.lastClickTime = now;
             this.lastClickX = mouseX;
             this.lastClickY = mouseY;
-            this.dragAnchor = this.getCursor();
+            this.dragAnchor = this.getCursorPosition();
             this.isDraggingSelection = true;
         } else if (!this.isFocused()) {
             this.dragAnchor = -1;
@@ -55,40 +109,40 @@ public class SelectableTextFieldWidget extends TextFieldWidget {
     }
 
     public boolean handleMouseDragged(double mouseX, double mouseY, int button) {
-        if (button != 0 || !this.isFocused() || !this.isDraggingSelection || this.dragAnchor < 0) {
+        if (!isLeftClick(button) || !this.isFocused() || !this.isDraggingSelection || this.dragAnchor < 0) {
             return false;
         }
         int newCursor = getCharIndexAt(mouseX);
-        this.setCursor(newCursor, true);
-        this.setSelectionEnd(this.dragAnchor);
+        this.setCursorPosition(newCursor);
+        this.setHighlightPos(this.dragAnchor);
         return true;
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0) {
+        if (isLeftClick(button)) {
             this.isDraggingSelection = false;
         }
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
     public void handleMouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0) {
+        if (isLeftClick(button)) {
             this.isDraggingSelection = false;
         }
     }
 
     public int getCharIndexAt(double mouseX) {
-        String fullText = this.getText();
+        String fullText = this.getValue();
         if (fullText.isEmpty()) {
             return 0;
         }
         int firstChar = 0;
         try {
-            firstChar = ((TextFieldWidgetAccessor) this).getFirstCharacterIndex();
+            firstChar = ((TextFieldWidgetAccessor) this).getDisplayPos();
         } catch (Throwable ignored) {}
 
-        int startX = this.getX() + (this.drawsBackground() ? 4 : 0);
+        int startX = this.getX() + (this.isBordered() ? 4 : 0);
         int relX = (int) Math.round(mouseX) - startX;
 
         if (relX <= 0) {
@@ -96,20 +150,18 @@ public class SelectableTextFieldWidget extends TextFieldWidget {
         }
 
         int innerWidth = this.getInnerWidth();
-        if (relX >= innerWidth || mouseX >= this.getX() + this.getWidth()) {
-            return fullText.length();
+        String visibleText = fullText.substring(firstChar);
+        String trimmed = this.font.plainSubstrByWidth(visibleText, innerWidth);
+
+        int currentWidth = 0;
+        for (int i = 0; i < trimmed.length(); i++) {
+            int charW = this.font.width(String.valueOf(trimmed.charAt(i)));
+            if (relX < currentWidth + charW / 2) {
+                return firstChar + i;
+            }
+            currentWidth += charW;
         }
 
-        String visibleText = fullText.substring(Math.min(firstChar, fullText.length()));
-        String trimmed = this.textRenderer.trimToWidth(visibleText, relX);
-        int charOffset = trimmed.length();
-        if (charOffset < visibleText.length()) {
-            int w1 = this.textRenderer.getWidth(visibleText.substring(0, charOffset));
-            int w2 = this.textRenderer.getWidth(visibleText.substring(0, charOffset + 1));
-            if (relX - w1 > (w2 - w1) / 2) {
-                charOffset++;
-            }
-        }
-        return MathHelper.clamp(firstChar + charOffset, 0, fullText.length());
+        return firstChar + trimmed.length();
     }
 }

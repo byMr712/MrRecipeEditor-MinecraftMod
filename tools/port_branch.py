@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -18,12 +19,21 @@ def is_gametest_supported(mc_ver):
         return parts[2] >= 5
     return False
 
+def is_identifier_version(mc_ver):
+    if mc_ver.startswith("26."):
+        return True
+    parts = [int(p) for p in mc_ver.split(".")]
+    if len(parts) >= 3 and parts[0] == 1 and parts[1] == 21:
+        return parts[2] >= 11
+    return False
+
 def port_current_branch():
     mc_ver = get_minecraft_version()
     has_gametests = is_gametest_supported(mc_ver)
-    print(f"=== Porting {mc_ver} (GameTests supported: {has_gametests}) ===")
+    uses_identifier = is_identifier_version(mc_ver)
+    print(f"=== Porting {mc_ver} (GameTests: {has_gametests}, Uses Identifier: {uses_identifier}) ===")
 
-    # 1. Checkout java code from 1.21.11
+    # 1. Checkout java code and build.gradle from 1.21.11
     subprocess.check_call(["git", "checkout", "1.21.11", "--", "src/main/java", "src/neoforge/java", "build.gradle"])
     if has_gametests:
         subprocess.check_call(["git", "checkout", "1.21.11", "--", "src/gametest"])
@@ -43,7 +53,25 @@ def port_current_branch():
     props_lines = [l for l in p_props.read_text(encoding="utf-8").splitlines() if not l.startswith("yarn_mappings=")]
     p_props.write_text("\n".join(props_lines) + "\n", encoding="utf-8")
 
-    # 3. Verify compilation
+    # 3. If version uses ResourceLocation instead of Identifier (1.21 - 1.21.10)
+    if not uses_identifier:
+        print("Converting Identifier -> ResourceLocation for < 1.21.11...")
+        for root, _, files in os.walk("src"):
+            for f in files:
+                if f.endswith(".java"):
+                    p = Path(root) / f
+                    t = p.read_text(encoding="utf-8")
+                    t = t.replace("import net.minecraft.resources.Identifier;", "import net.minecraft.resources.ResourceLocation;")
+                    t = t.replace("Identifier.", "ResourceLocation.")
+                    t = t.replace("Identifier ", "ResourceLocation ")
+                    t = t.replace("Identifier>", "ResourceLocation>")
+                    t = t.replace("<Identifier", "<ResourceLocation")
+                    t = t.replace("(Identifier", "(ResourceLocation")
+                    t = t.replace("Identifier[]", "ResourceLocation[]")
+                    t = t.replace(".identifier()", ".location()")
+                    p.write_text(t, encoding="utf-8")
+
+    # 4. Verify compilation
     print("Running ./gradlew compileJava...")
     subprocess.check_call(["cmd.exe", "/c", "gradlew.bat", "compileJava"])
     if has_gametests:
@@ -52,7 +80,7 @@ def port_current_branch():
     print("Running ./gradlew build...")
     subprocess.check_call(["cmd.exe", "/c", "gradlew.bat", "build"])
 
-    # 4. Commit
+    # 5. Commit
     subprocess.check_call(["git", "add", "."])
     commit_msg = f"Migrate {mc_ver} from Yarn to Official Mojang mappings"
     if has_gametests:

@@ -2,9 +2,9 @@ package com.recipeeditor.integration;
 
 import com.recipeeditor.RecipeEditorMod;
 import com.recipeeditor.recipe.CustomRecipeDispatcher;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.recipe.RecipeEntry;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.world.item.crafting.RecipeHolder;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -107,7 +107,7 @@ public class RecipeViewerIntegration {
                             if (display != null && originHandle != null) {
                                 try {
                                     Object origin = originHandle.invoke(display);
-                                    if (origin instanceof RecipeEntry<?> re
+                                    if (origin instanceof RecipeHolder<?> re
                                             && CustomRecipeDispatcher.isRecipeOverridden(re)) {
                                         return resultInterruptFalse;
                                     }
@@ -161,7 +161,7 @@ public class RecipeViewerIntegration {
 
     /**
      * Schedules a debounced full reload of recipe viewers (used for full resets).
-     * Protected by Workstation Guard: will NEVER execute while a workstation (HandledScreen) is open!
+     * Protected by Workstation Guard: will NEVER execute while a workstation (AbstractContainerScreen) is open!
      */
     public static synchronized void reloadRecipeViewers() {
         scheduleReload(DEBOUNCE_DELAY_MS);
@@ -175,19 +175,19 @@ public class RecipeViewerIntegration {
     }
 
     private static void checkAndDispatchReload() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client == null) {
             return;
         }
 
         client.execute(() -> {
-            if (client.world == null) {
+            if (client.level == null) {
                 return;
             }
 
             // WORKSTATION GUARD: If the player has a container / crafting table / furnace open,
             // DO NOT reload now to prevent UI lag. Wait until they close the screen.
-            if (client.currentScreen instanceof HandledScreen) {
+            if (client.screen instanceof AbstractContainerScreen) {
                 scheduleReload(500);
                 return;
             }

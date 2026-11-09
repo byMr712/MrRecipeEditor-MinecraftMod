@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "recipeeditor-test",
+  "version": "1.0.0",
+  "name": "RecipeEditor client game tests",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "com.recipeeditor.test.RecipeMechanicsTest",
+      "com.recipeeditor.test.CraftingEngineTest",
+      "com.recipeeditor.test.SmithingEngineTest",
+      "com.recipeeditor.test.RecipeInspectorTest",
+      "com.recipeeditor.test.RecipeEditorUiTest",
+      "com.recipeeditor.test.RecipeEditorClientGameTest",
+      "com.recipeeditor.test.ThumbnailShots"
+    ]
+  },
+  "depends": {
+    "recipeeditor": "*"
+  }
+}
